@@ -1,0 +1,12 @@
+{
+  "name": "cogni-adapt-extension",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "echo \"build placeholder\""
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.1.36"
+  }
+}

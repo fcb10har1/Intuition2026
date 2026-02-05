@@ -1,17 +1,10 @@
 /**
- * Dev 2 – Content Script
- * - Receives popup messages: TOGGLE_FOCUS, SET_INTENSITY
- * - Sets <html data-cog-focus="on/off"> and <html data-cog-level="mild|med|strong">
- * - Injects focus_mode.css once
- * - Shows small toast
- * - Safe if injected multiple times
+ * Dev 2 – Content Script (JS version)
+ * Chrome loads THIS file
  */
 
-type ToggleFocusMsg = { type: "TOGGLE_FOCUS"; enabled: boolean };
-type SetIntensityMsg = { type: "SET_INTENSITY"; level: "mild" | "med" | "strong" };
-type IncomingMsg = ToggleFocusMsg | SetIntensityMsg;
-
 (() => {
+  // Prevent double injection
   if (window.__COGNI_FOCUS_INIT__) return;
   window.__COGNI_FOCUS_INIT__ = true;
 
@@ -19,14 +12,16 @@ type IncomingMsg = ToggleFocusMsg | SetIntensityMsg;
   const STYLE_ID = "cogni-focus-style";
   const TOAST_ID = "cogni-focus-toast";
 
-  const DEFAULT_LEVEL: SetIntensityMsg["level"] = "med";
+  const DEFAULT_LEVEL = "med";
 
-  function normalizeLevel(level: unknown): SetIntensityMsg["level"] {
-    if (level === "mild" || level === "med" || level === "strong") return level;
+  function normalizeLevel(level) {
+    if (level === "mild" || level === "med" || level === "strong") {
+      return level;
+    }
     return DEFAULT_LEVEL;
   }
 
-  function injectCssOnce(): void {
+  function injectCssOnce() {
     if (document.getElementById(STYLE_ID)) return;
 
     const link = document.createElement("link");
@@ -34,27 +29,28 @@ type IncomingMsg = ToggleFocusMsg | SetIntensityMsg;
     link.rel = "stylesheet";
     link.type = "text/css";
 
-    // IMPORTANT: This path must be declared in manifest.json web_accessible_resources.
-    link.href = chrome.runtime.getURL("src/content/adapt/css/focus_mode.css");
+    link.href = chrome.runtime.getURL(
+      "src/content/adapt/css/focus_mode.css"
+    );
 
     (document.head || document.documentElement).appendChild(link);
   }
 
-  function setFocusEnabled(enabled: boolean): void {
+  function setFocusEnabled(enabled) {
     HTML.dataset.cogFocus = enabled ? "on" : "off";
   }
 
-  function setLevel(level: SetIntensityMsg["level"]): void {
+  function setLevel(level) {
     HTML.dataset.cogLevel = level;
   }
 
-  function showToast(text: string): void {
-    let toast = document.getElementById(TOAST_ID) as HTMLDivElement | null;
+  function showToast(text) {
+    let toast = document.getElementById(TOAST_ID);
+
     if (!toast) {
       toast = document.createElement("div");
       toast.id = TOAST_ID;
 
-      // Inline styles so it survives hostile site CSS
       toast.style.position = "fixed";
       toast.style.right = "16px";
       toast.style.bottom = "16px";
@@ -80,14 +76,13 @@ type IncomingMsg = ToggleFocusMsg | SetIntensityMsg;
     toast.textContent = text;
     toast.style.opacity = "1";
 
-    const anyToast = toast as any;
-    if (anyToast.__hideTimer) clearTimeout(anyToast.__hideTimer);
-    anyToast.__hideTimer = setTimeout(() => {
-      toast!.style.opacity = "0";
+    if (toast.__hideTimer) clearTimeout(toast.__hideTimer);
+    toast.__hideTimer = setTimeout(() => {
+      toast.style.opacity = "0";
     }, 1800);
   }
 
-  function apply(enabled: boolean, level: SetIntensityMsg["level"], announce = true): void {
+  function apply(enabled, level, announce = true) {
     injectCssOnce();
     setFocusEnabled(enabled);
     setLevel(level);
@@ -98,39 +93,47 @@ type IncomingMsg = ToggleFocusMsg | SetIntensityMsg;
     }
   }
 
-  async function loadInitialStateFromStorage(): Promise<void> {
+  async function loadInitialStateFromStorage() {
     try {
-      const res = await chrome.storage.sync.get(["focusEnabled", "intensityLevel"]);
-      const enabled = typeof res.focusEnabled === "boolean" ? res.focusEnabled : false;
+      const res = await chrome.storage.sync.get([
+        "focusEnabled",
+        "intensityLevel",
+      ]);
+
+      const enabled =
+        typeof res.focusEnabled === "boolean" ? res.focusEnabled : false;
+
       const level = normalizeLevel(res.intensityLevel);
+
       apply(enabled, level, false);
     } catch {
-      // Fallback
       apply(false, DEFAULT_LEVEL, false);
     }
   }
 
-  // Listen to messages from popup/background
-  chrome.runtime.onMessage.addListener((msg: IncomingMsg, _sender, sendResponse) => {
-    if (!msg || typeof (msg as any).type !== "string") return;
+  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+    if (!msg || typeof msg.type !== "string") return;
 
     if (msg.type === "TOGGLE_FOCUS") {
       const enabled = !!msg.enabled;
       const currentLevel = normalizeLevel(HTML.dataset.cogLevel);
+
       apply(enabled, currentLevel, true);
-      sendResponse?.({ ok: true });
+
+      if (sendResponse) sendResponse({ ok: true });
       return true;
     }
 
     if (msg.type === "SET_INTENSITY") {
       const level = normalizeLevel(msg.level);
       const enabled = HTML.dataset.cogFocus === "on";
+
       apply(enabled, level, true);
-      sendResponse?.({ ok: true });
+
+      if (sendResponse) sendResponse({ ok: true });
       return true;
     }
   });
 
-  // Boot
-  void loadInitialStateFromStorage();
+  loadInitialStateFromStorage();
 })();
