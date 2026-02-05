@@ -83,3 +83,77 @@ html[data-cog-focus="on"] :focus {
   outline: 3px solid rgba(255, 165, 0, 0.9) !important;
   outline-offset: 2px !important;
 }
+
+/* ===== AI-Recommended Assists ===== */
+
+/* Reading Ease: Improved spacing & typography */
+html.assist-reading-ease {
+  font-size: 16px !important;
+}
+
+html.assist-reading-ease body {
+  line-height: 1.8 !important;
+  letter-spacing: 0.3px !important;
+}
+
+html.assist-reading-ease p, 
+html.assist-reading-ease li {
+  margin-bottom: 1.2em !important;
+  max-width: 65ch !important;
+}
+
+html.assist-reading-ease h1,
+html.assist-reading-ease h2,
+html.assist-reading-ease h3 {
+  margin-top: 1.5em !important;
+  margin-bottom: 0.8em !important;
+}
+
+/* Reduce Distractions: Hide common distraction elements */
+html.assist-reduce-distractions [class*="ad" i],
+html.assist-reduce-distractions [id*="ad" i],
+html.assist-reduce-distractions [class*="banner" i],
+html.assist-reduce-distractions [id*="banner" i],
+html.assist-reduce-distractions [class*="popup" i],
+html.assist-reduce-distractions [id*="popup" i],
+html.assist-reduce-distractions [class*="modal" i],
+html.assist-reduce-distractions .twitter-widget {
+  display: none !important;
+}
+
+html.assist-reduce-distractions {
+  --webkit-animation: none !important;
+  animation: none !important;
+}
+
+/* Step-by-Step: Highlight primary actions, dim secondary */
+html.assist-step-by-step button:not(:first-of-type) {
+  opacity: 0.5 !important;
+}
+
+html.assist-step-by-step button:first-of-type {
+  border-width: 2px !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2) !important;
+}
+
+html.assist-step-by-step form {
+  border: 2px solid #e5e7eb !important;
+  padding: 20px !important;
+  border-radius: 12px !important;
+  background: #f9fafb !important;
+}
+
+/* Time Control: Show elapsed time (simple counter) */
+html.assist-time-control::before {
+  content: "⏱ Session time shown above";
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  z-index: 999999;
+  background: #1f2937;
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
