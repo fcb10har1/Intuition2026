@@ -29,6 +29,7 @@
       .spacer { height: 10px; }
       .muted { color: #777; font-size: 12px; margin-top: 10px; }
       .badge { display: inline-block; padding: 2px 8px; border: 1px solid #ddd; border-radius: 999px; font-size: 12px; }
+      .full { width: 100%; }
     </style>
   </head>
 
@@ -56,6 +57,13 @@
         </select>
       </div>
 
+      <!-- Nice-to-have: Reset -->
+      <div class="spacer"></div>
+
+      <div class="row">
+        <button id="resetBtn" class="full">Reset</button>
+      </div>
+
       <div class="muted">
         Tip: If nothing changes, refresh the tab once.
       </div>
@@ -64,3 +72,4 @@
     <script src="popup.js"></script>
   </body>
 </html>
+

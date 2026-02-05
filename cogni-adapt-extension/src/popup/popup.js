@@ -30,14 +30,13 @@ function setUI({ focusEnabled, intensity }) {
   const status = document.getElementById("status");
   const intensitySelect = document.getElementById("intensitySelect");
 
-  toggleBtn.textContent = focusEnabled ? "ON" : "OFF";
-  status.textContent = focusEnabled ? "ON" : "OFF";
-  intensitySelect.value = intensity;
+  if (toggleBtn) toggleBtn.textContent = focusEnabled ? "ON" : "OFF";
+  if (status) status.textContent = focusEnabled ? "ON" : "OFF";
+  if (intensitySelect) intensitySelect.value = intensity;
 }
 
 // ---- Ensure content script + css are injected ----
-// This keeps Dev 2's content.js always present for messaging.
-// IMPORTANT: Dev 2 must create content.js + content.css with listeners.
+// IMPORTANT: Dev 2 must create content.js (+ content.css if you use it).
 async function ensureInjected(tabId) {
   // Inject JS (safe if run multiple times; Dev 2 should guard with a global flag)
   await chrome.scripting.executeScript({
@@ -45,11 +44,15 @@ async function ensureInjected(tabId) {
     files: ["content.js"]
   });
 
-  // Inject CSS (focus styles / intensity styles)
-  await chrome.scripting.insertCSS({
-    target: { tabId },
-    files: ["content.css"]
-  });
+  // Inject CSS if present (avoid crashing if content.css doesn't exist)
+  try {
+    await chrome.scripting.insertCSS({
+      target: { tabId },
+      files: ["content.css"]
+    });
+  } catch (_) {
+    // It's okay if you don't have content.css (e.g., you load CSS via getURL in content.js)
+  }
 }
 
 // ---- Send messages to content script ----
@@ -63,6 +66,16 @@ async function sendToContent(tabId, message) {
   }
 }
 
+// ---- Nice-to-have: apply current saved settings to page ----
+async function applySavedStateToTab(tabId) {
+  const settings = await loadSettings();
+  await ensureInjected(tabId);
+
+  // Send intensity first, then focus
+  await sendToContent(tabId, { type: "SET_INTENSITY", level: settings.intensity });
+  await sendToContent(tabId, { type: "TOGGLE_FOCUS", enabled: settings.focusEnabled });
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   // Load initial state
   const settings = await loadSettings();
@@ -70,9 +83,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   const toggleBtn = document.getElementById("toggleBtn");
   const intensitySelect = document.getElementById("intensitySelect");
+  const resetBtn = document.getElementById("resetBtn");
+
+  // Nice-to-have #1: auto-apply saved state when opening popup (persistent feel)
+  try {
+    const tab = await getActiveTab();
+    if (tab?.id) await applySavedStateToTab(tab.id);
+  } catch (_) {}
 
   // Toggle Focus Mode
-  toggleBtn.addEventListener("click", async () => {
+  toggleBtn?.addEventListener("click", async () => {
     const tab = await getActiveTab();
     if (!tab?.id) return;
 
@@ -87,12 +107,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Contract message #1:
     await sendToContent(tab.id, { type: "TOGGLE_FOCUS", enabled: nextEnabled });
 
-    // Also send current intensity so content can apply correct level
-    await sendToContent(tab.id, { type: "SET_INTENSITY", level: (await loadSettings()).intensity });
+    // Also send intensity so content can apply correct level
+    const latest = await loadSettings();
+    await sendToContent(tab.id, { type: "SET_INTENSITY", level: latest.intensity });
   });
 
   // Set Intensity
-  intensitySelect.addEventListener("change", async (e) => {
+  intensitySelect?.addEventListener("change", async (e) => {
     const tab = await getActiveTab();
     if (!tab?.id) return;
 
@@ -107,21 +128,23 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Contract message #2:
     await sendToContent(tab.id, { type: "SET_INTENSITY", level });
 
-    // If focus is ON, we can resend focus to ensure consistency
+    // If focus is ON, resend focus to enforce styling consistency
     if (current.focusEnabled) {
       await sendToContent(tab.id, { type: "TOGGLE_FOCUS", enabled: true });
     }
   });
 
-  // OPTIONAL: auto-apply saved state when opening popup (nice UX)
-  // This makes it feel "persistent".
-  // Only do this if you want it: it will message the content script each time popup opens.
-  try {
+  // Nice-to-have #2: Reset button (Focus OFF + Intensity MED)
+  resetBtn?.addEventListener("click", async () => {
     const tab = await getActiveTab();
-    if (tab?.id) {
-      await ensureInjected(tab.id);
-      await sendToContent(tab.id, { type: "SET_INTENSITY", level: settings.intensity });
-      await sendToContent(tab.id, { type: "TOGGLE_FOCUS", enabled: settings.focusEnabled });
-    }
-  } catch (_) {}
+    if (!tab?.id) return;
+
+    const resetState = { focusEnabled: false, intensity: "med" };
+    await chrome.storage.sync.set(resetState);
+    setUI(resetState);
+
+    await ensureInjected(tab.id);
+    await sendToContent(tab.id, { type: "SET_INTENSITY", level: "med" });
+    await sendToContent(tab.id, { type: "TOGGLE_FOCUS", enabled: false });
+  });
 });
