@@ -1,6 +1,30 @@
-// demo/adapt.js
-// Dev 3 deliverable: overload detection + optional simplification (no AI)
-// Contract for Dev 2: startOverloadMonitor(onOverload)
+/**
+ * demo/adapt.js
+ * 
+ * Dev 3 Deliverable: "Smart" Overload Detection + Text Simplification
+ * 
+ * RULES-BASED HEURISTICS (no AI):
+ * - Detects scroll reversals (thrashing behavior)
+ * - Detects idle/pause periods (user stuck)
+ * - Accumulates "overload score" from these signals
+ * - Triggers callback when score exceeds threshold
+ * 
+ * CONTRACT FOR DEV 2 (Content Script Integration):
+ * ================================================
+ * Expose globally: window.startOverloadMonitor(onOverload)
+ * 
+ * Example usage in content script:
+ * ```
+ * window.startOverloadMonitor(() => {
+ *   // When overload detected, tell the extension to:
+ *   // - Apply Focus Mode CSS
+ *   // - Log to metrics store
+ *   // - Show in-page notification
+ * });
+ * ```
+ * 
+ * Returns: stop() function to halt monitoring
+ */
 
 (function () {
   const state = {
@@ -21,28 +45,56 @@
     badge.id = "intuition-overload-badge";
     badge.style.cssText = `
       position: fixed; right: 16px; bottom: 16px; z-index: 999999;
-      background: #111827; color: #fff; padding: 10px 12px; border-radius: 12px;
-      font: 12px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      box-shadow: 0 10px 20px rgba(0,0,0,.15);
-      max-width: 260px;
+      background: linear-gradient(135deg, #111827 0%, #1f2937 100%);
+      color: #fff; padding: 12px 14px; border-radius: 12px;
+      font: 12px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+      max-width: 280px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      transition: all 0.3s ease;
     `;
-    badge.textContent = "Overload monitor: running…";
+    badge.textContent = "📊 Overload monitor: running…";
     document.body.appendChild(badge);
     return badge;
   }
 
-  function toast(msg) {
+  function toast(msg, type = "success") {
     const t = document.createElement("div");
     t.textContent = msg;
+    
+    const bgColor = type === "success" ? "#16a34a" : type === "warning" ? "#ea580c" : "#1e40af";
+    
     t.style.cssText = `
-      position: fixed; left: 50%; top: 76px; transform: translateX(-50%);
-      z-index: 999999; background: #16a34a; color: #fff;
-      padding: 8px 12px; border-radius: 999px;
-      font: 12px system-ui;
-      box-shadow: 0 10px 20px rgba(0,0,0,.12);
+      position: fixed; left: 50%; top: 90px; transform: translateX(-50%);
+      z-index: 999999; background: ${bgColor}; color: #fff;
+      padding: 10px 14px; border-radius: 999px;
+      font: 13px system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+      animation: toastSlideIn 0.3s ease;
     `;
     document.body.appendChild(t);
-    setTimeout(() => t.remove(), 2400);
+    setTimeout(() => {
+      t.style.animation = "toastSlideOut 0.3s ease";
+      setTimeout(() => t.remove(), 300);
+    }, 2400);
+  }
+  
+  // Add toast animations to document if not present
+  if (!document.getElementById("intuition-toast-styles")) {
+    const style = document.createElement("style");
+    style.id = "intuition-toast-styles";
+    style.textContent = `
+      @keyframes toastSlideIn {
+        from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+        to { opacity: 1; transform: translateX(-50%) translateY(0); }
+      }
+      @keyframes toastSlideOut {
+        from { opacity: 1; transform: translateX(-50%) translateY(0); }
+        to { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+      }
+    `;
+    document.head.appendChild(style);
   }
 
   function recordAction() {
@@ -66,115 +118,157 @@
 
   function simplifyDenseText() {
     const paras = document.querySelectorAll(".dense");
+    let simplified = 0;
+
     paras.forEach((p) => {
       if (!(p instanceof HTMLElement)) return;
       const text = p.innerText.trim();
-      if (text.length < 180) return;
+      if (text.length < 100) return;
       if (p.dataset.chunkified === "true") return;
 
       state.originalDense.set(p, text);
 
+      // Split by sentence boundaries
       const sentences = text.split(/(?<=[.!?])\s+/).filter(Boolean);
-      if (sentences.length < 3) return;
+      if (sentences.length < 2) return;
 
+      // Create bullet-point list
       const ul = document.createElement("ul");
-      ul.style.cssText = "margin:10px 0; padding-left:18px; line-height:1.55;";
-      sentences.slice(0, 6).forEach((s) => {
+      ul.style.cssText = "margin:12px 0; padding-left:20px; line-height:1.6; color: inherit;";
+      
+      sentences.slice(0, 8).forEach((s) => {
         const li = document.createElement("li");
         li.textContent = s.replace(/\s+/g, " ").trim();
+        li.style.cssText = "margin-bottom: 8px;";
         ul.appendChild(li);
       });
 
       p.innerHTML = "";
       p.appendChild(ul);
       p.dataset.chunkified = "true";
+      simplified++;
     });
 
-    toast("Simplified dense text (demo)");
+    const msg = simplified > 0 
+      ? `✓ Simplified ${simplified} dense paragraph(s) into digestible points`
+      : "No dense text found to simplify";
+    toast(msg, "success");
   }
 
   function resetDenseText() {
+    let reset = 0;
     state.originalDense.forEach((text, el) => {
       el.textContent = text;
       delete el.dataset.chunkified;
+      reset++;
     });
     state.originalDense.clear();
-    toast("Reset text (demo)");
+    toast(`↻ Reset ${reset} simplified paragraph(s) (demo)`, "success");
   }
 
-  // -------- CONTRACT FUNCTION --------
+  /**
+   * Main contract function exposed for Dev 2.
+   * 
+   * @param {Function} onOverload - Callback when overload is detected (score >= threshold)
+   * @returns {Function} stop() - Call to halt monitoring
+   * 
+   * Algorithm:
+   * 1. Track scroll direction changes (reversals = thrashing)
+   * 2. Track idle time (no interaction for IDLE_MS)
+   * 3. Accumulate "overload score" from signals
+   * 4. Decay score over time (natural recovery)
+   * 5. Trigger callback when score exceeds threshold
+   */
   function startOverloadMonitor(onOverload) {
     const badge = createBadge();
 
-    // tuning knobs
-    const WINDOW_MS = 8000;        // how far back to consider reversals
-    const REVERSAL_CLUSTER = 4;    // number of reversals in window to count as "thrashing"
-    const REVERSAL_POINTS = 14;    // score added per thrash cluster
-    const IDLE_MS = 7000;          // pause threshold
-    const IDLE_POINTS = 8;         // score added if user seems stuck
-    const DECAY = 3;               // score decay per tick
-    const THRESHOLD = 40;          // trigger overload
+    // ===== TUNING PARAMETERS =====
+    // Adjust these to control overload sensitivity
+    const WINDOW_MS = 6000;        // ms: recent reversals window
+    const REVERSAL_CLUSTER = 3;    // count: reversals to trigger thrashing
+    const REVERSAL_POINTS = 18;    // points: added per thrash cluster
+    const IDLE_MS = 5000;          // ms: pause threshold before "stuck"
+    const IDLE_POINTS = 12;        // points: added if idle
+    const DECAY = 4;               // points: decay per tick (slower recovery)
+    const THRESHOLD = 35;          // trigger at this score
+    const TICK_MS = 800;           // ms: check interval
 
+    // Event listeners: track user interactions
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("click", recordAction, true);
     window.addEventListener("keydown", recordAction, true);
+    window.addEventListener("input", recordAction, true);
 
     const interval = setInterval(() => {
       const t = performance.now();
 
-      // keep only reversals in the recent window
+      // Keep only reversals within recent window
       state.reversalTimes = state.reversalTimes.filter((rt) => t - rt <= WINDOW_MS);
 
-      // if many reversals recently, increase score
+      // Signal 1: Scroll thrashing (rapid direction reversals)
       if (state.reversalTimes.length >= REVERSAL_CLUSTER) {
         state.score += REVERSAL_POINTS;
-        // prevent instant repeat
-        state.reversalTimes.splice(0, Math.min(3, state.reversalTimes.length));
+        // Prevent infinite stacking of the same reversals
+        state.reversalTimes.splice(0, Math.min(2, state.reversalTimes.length));
       }
 
-      // if idle for too long, increase score
+      // Signal 2: Idle / stuck (no interaction for extended period)
       const idleFor = t - state.lastActionT;
       if (idleFor >= IDLE_MS) {
         state.score += IDLE_POINTS;
-        // avoid stacking idle points every tick
-        state.lastActionT = t - 2000;
+        // Avoid stacking idle points every tick
+        state.lastActionT = t - 2500;
       }
 
-      // decay score
+      // Natural score decay (user recovers over time)
       state.score = Math.max(0, state.score - DECAY);
 
-      badge.textContent = `Overload score: ${state.score} • reversals: ${state.reversalTimes.length}`;
+      // Update badge with real-time metrics
+      const reversalStr = state.reversalTimes.length > 0 
+        ? `${state.reversalTimes.length} reversals` 
+        : "normal scrolling";
+      badge.textContent = `📊 Score: ${Math.round(state.score)} | ${reversalStr}`;
 
+      // Trigger overload callback and cleanup
       if (!state.triggered && state.score >= THRESHOLD) {
         state.triggered = true;
-        badge.textContent = "⚠️ Overload detected — activating Focus Mode…";
-        try { onOverload?.(); } catch {}
+        badge.style.background = "linear-gradient(135deg, #dc2626 0%, #991b1b 100%)";
+        badge.textContent = "⚠️ Overload detected → Enabling Focus Mode…";
+        try { onOverload?.(); } catch (e) { console.error("Overload callback error:", e); }
         clearInterval(interval);
       }
-    }, 900);
+    }, TICK_MS);
 
-    // optional stop function
+    // Expose stop function for cleanup
     return function stop() {
       clearInterval(interval);
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("click", recordAction, true);
       window.removeEventListener("keydown", recordAction, true);
-      badge.textContent = "Overload monitor: stopped";
+      window.removeEventListener("input", recordAction, true);
+      badge.textContent = "⏹ Monitor stopped";
     };
   }
 
-  // Expose globally for Dev 2 to merge into content script
+  // ===== GLOBAL EXPOSURE FOR DEV 2 =====
   window.startOverloadMonitor = startOverloadMonitor;
 
-  // Demo wiring (so it works even without the extension)
+  // ===== DEMO PAGE WIRING (local testing) =====
+  // On the demo page, attach the simplify/reset buttons and auto-start monitoring
+  
   const simplifyBtn = document.getElementById("simplifyBtn");
   const resetBtn = document.getElementById("resetBtn");
+  
   if (simplifyBtn) simplifyBtn.addEventListener("click", simplifyDenseText);
   if (resetBtn) resetBtn.addEventListener("click", resetDenseText);
 
-  // Auto-run on the demo page: when overload triggers, toggle Focus Mode visually
+  // Auto-start overload detection on demo page
+  // When triggered, toggle Focus Mode CSS class
   startOverloadMonitor(() => {
     document.documentElement.dataset.cogFocus = "true";
-    toast("Overload detected → Focus Mode ON (demo)");
+    toast("⚡ Overload detected → Focus Mode ACTIVATED (demo)", "warning");
+    setTimeout(() => {
+      toast("💡 In production, this would disable ads, sidebars, and distractions", "success");
+    }, 800);
   });
 })();
