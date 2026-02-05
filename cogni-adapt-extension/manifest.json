@@ -2,15 +2,34 @@
   "manifest_version": 3,
   "name": "Adaptive A11y Layer",
   "version": "0.1.0",
-  "description": "AI-powered adaptive accessibility layer (MVP: Focus Mode + Intensity).",
-  "permissions": ["storage", "activeTab", "scripting"],
+  "description": "AI-powered adaptive accessibility layer (Focus Mode + progressive adaptation).",
+
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+
   "action": {
     "default_title": "Adaptive A11y",
     "default_popup": "popup.html"
   },
+
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
-  }
+  },
+
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "src/content/adapt/css/focus_mode.css"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ]
 }
+
