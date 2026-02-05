@@ -1,0 +1,11 @@
+/* Dark Mode CSS */
+html[data-cogDarkMode="on"] {
+  filter: invert(1) hue-rotate(180deg);
+  background-color: #1a1a2e !important;
+  color: #eaeaea !important;
+}
+
+html[data-cogDarkMode="on"] img,
+html[data-cogDarkMode="on"] video {
+  filter: invert(1) hue-rotate(180deg);
+}

@@ -1,0 +1,66 @@
+/* Cursor Enhancement CSS for Accessibility */
+
+/* Default Cursor Styles */
+html[data-cogCursorMode="standard"] {
+  cursor: auto;
+}
+
+/* Enhanced Cursor for Elderly & ADHD Users */
+html[data-cogCursorMode="enhanced"] {
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="14" fill="%236366f1" opacity="0.3" stroke="%236366f1" stroke-width="2"/><circle cx="16" cy="16" r="4" fill="%236366f1"/></svg>') 16 16, auto !important;
+}
+
+html[data-cogCursorMode="enhanced"] * {
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="14" fill="%236366f1" opacity="0.3" stroke="%236366f1" stroke-width="2"/><circle cx="16" cy="16" r="4" fill="%236366f1"/></svg>') 16 16, auto !important;
+}
+
+/* Clickable Elements - Extra Visual Feedback */
+html[data-cogCursorMode="enhanced"] button,
+html[data-cogCursorMode="enhanced"] a,
+html[data-cogCursorMode="enhanced"] [role="button"],
+html[data-cogCursorMode="enhanced"] input[type="button"],
+html[data-cogCursorMode="enhanced"] input[type="submit"],
+html[data-cogCursorMode="enhanced"] input[type="checkbox"],
+html[data-cogCursorMode="enhanced"] input[type="radio"],
+html[data-cogCursorMode="enhanced"] select,
+html[data-cogCursorMode="enhanced"] textarea {
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="14" fill="%2310b981" opacity="0.3" stroke="%2310b981" stroke-width="2"/><circle cx="16" cy="16" r="6" fill="%2310b981"/><path d="M16 10 L16 22 M10 16 L22 16" stroke="%2310b981" stroke-width="1.5" stroke-linecap="round"/></svg>') 16 16, pointer !important;
+}
+
+/* Extra Large Cursor Mode */
+html[data-cogCursorMode="large"] {
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48"><circle cx="24" cy="24" r="22" fill="%236366f1" opacity="0.2" stroke="%236366f1" stroke-width="3"/><circle cx="24" cy="24" r="6" fill="%236366f1"/></svg>') 24 24, auto !important;
+}
+
+html[data-cogCursorMode="large"] button,
+html[data-cogCursorMode="large"] a,
+html[data-cogCursorMode="large"] [role="button"],
+html[data-cogCursorMode="large"] input[type="button"],
+html[data-cogCursorMode="large"] input[type="submit"],
+html[data-cogCursorMode="large"] input[type="checkbox"],
+html[data-cogCursorMode="large"] input[type="radio"],
+html[data-cogCursorMode="large"] select,
+html[data-cogCursorMode="large"] textarea {
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48"><circle cx="24" cy="24" r="22" fill="%2310b981" opacity="0.25" stroke="%2310b981" stroke-width="3"/><circle cx="24" cy="24" r="8" fill="%2310b981"/><path d="M24 14 L24 34 M14 24 L34 24" stroke="%2310b981" stroke-width="2" stroke-linecap="round"/></svg>') 24 24, pointer !important;
+}
+
+/* Highlight clickable elements for better visibility */
+html[data-cogCursorMode="enhanced"] button,
+html[data-cogCursorMode="enhanced"] a,
+html[data-cogCursorMode="enhanced"] [role="button"],
+html[data-cogCursorMode="large"] button,
+html[data-cogCursorMode="large"] a,
+html[data-cogCursorMode="large"] [role="button"] {
+  position: relative;
+  transition: all 0.15s ease;
+}
+
+html[data-cogCursorMode="enhanced"] button:hover,
+html[data-cogCursorMode="enhanced"] a:hover,
+html[data-cogCursorMode="enhanced"] [role="button"]:hover,
+html[data-cogCursorMode="large"] button:hover,
+html[data-cogCursorMode="large"] a:hover,
+html[data-cogCursorMode="large"] [role="button"]:hover {
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2) !important;
+  transform: scale(1.02);
+}

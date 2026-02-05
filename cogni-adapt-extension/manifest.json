@@ -21,7 +21,14 @@
 
   "web_accessible_resources": [
     {
-      "resources": ["src/content/adapt/css/focus_mode.css"],
+      "resources": [
+        "src/content/adapt/css/focus_mode.css",
+        "src/content/adapt/css/orb.css",
+        "src/content/adapt/css/focus_overlay.css",
+        "src/content/adapt/css/distraction_killer.css",
+        "src/content/adapt/css/dark_mode.css",
+        "src/content/adapt/css/cursor.css"
+      ],
       "matches": ["<all_urls>"]
     }
   ]
