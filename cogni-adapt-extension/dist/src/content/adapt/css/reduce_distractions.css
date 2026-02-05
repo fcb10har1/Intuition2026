@@ -1,0 +1,49 @@
+html[data-cog-focus="true"] header,
+html[data-cog-focus="true"] nav,
+html[data-cog-focus="true"] aside,
+html[data-cog-focus="true"] footer,
+html[data-cog-focus="true"] [role="navigation"],
+html[data-cog-focus="true"] [role="banner"],
+html[data-cog-focus="true"] [role="complementary"],
+html[data-cog-focus="true"] .sidebar,
+html[data-cog-focus="true"] .navbox,
+html[data-cog-focus="true"] .mw-portlet,
+html[data-cog-focus="true"] .mw-panel,
+html[data-cog-focus="true"] .vector-header-container,
+html[data-cog-focus="true"] .vector-column-start,
+html[data-cog-focus="true"] .vector-page-toolbar,
+html[data-cog-focus="true"] .vector-toc,
+html[data-cog-focus="true"] .toc,
+html[data-cog-focus="true"] #mw-navigation,
+html[data-cog-focus="true"] #mw-panel,
+html[data-cog-focus="true"] #mw-head {
+  display: none !important;
+}
+
+html[data-cog-focus="true"] body {
+  background: #f6f7fb !important;
+}
+
+html[data-cog-focus="true"] main,
+html[data-cog-focus="true"] #content,
+html[data-cog-focus="true"] #mw-content-text,
+html[data-cog-focus="true"] article {
+  max-width: 900px !important;
+  margin: 0 auto !important;
+  padding: 20px !important;
+  background: white !important;
+  border-radius: 16px !important;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.06) !important;
+}
+
+html[data-cog-focus="true"] p,
+html[data-cog-focus="true"] li {
+  line-height: 1.8 !important;
+  font-size: 18px !important;
+}
+
+html[data-cog-focus="true"] h1,
+html[data-cog-focus="true"] h2,
+html[data-cog-focus="true"] h3 {
+  line-height: 1.3 !important;
+}
