@@ -1,0 +1,85 @@
+/* Focus Mode CSS
+   Activated when:
+   <html data-cog-focus="on" data-cog-level="mild|med|strong">
+*/
+
+html[data-cog-focus="on"] {
+  scroll-behavior: auto !important;
+}
+
+/* ===== Reduce clutter / visual noise ===== */
+html[data-cog-focus="on"] nav,
+html[data-cog-focus="on"] aside,
+html[data-cog-focus="on"] header [role="navigation"],
+html[data-cog-focus="on"] [role="navigation"],
+html[data-cog-focus="on"] [aria-label*="nav" i],
+html[data-cog-focus="on"] [aria-label*="menu" i],
+html[data-cog-focus="on"] [class*="sidebar" i],
+html[data-cog-focus="on"] [id*="sidebar" i],
+html[data-cog-focus="on"] [class*="ad-" i],
+html[data-cog-focus="on"] [id*="ad-" i],
+html[data-cog-focus="on"] [class*="ads" i],
+html[data-cog-focus="on"] [id*="ads" i],
+html[data-cog-focus="on"] [class*="banner" i],
+html[data-cog-focus="on"] [id*="banner" i] {
+  display: none !important;
+}
+
+/* Medium/Strong: hide more recommendation/promotional panels */
+html[data-cog-focus="on"][data-cog-level="med"] [class*="recommend" i],
+html[data-cog-focus="on"][data-cog-level="med"] [id*="recommend" i],
+html[data-cog-focus="on"][data-cog-level="med"] [class*="related" i],
+html[data-cog-focus="on"][data-cog-level="med"] [id*="related" i],
+html[data-cog-focus="on"][data-cog-level="med"] [class*="promo" i],
+html[data-cog-focus="on"][data-cog-level="med"] [id*="promo" i],
+html[data-cog-focus="on"][data-cog-level="med"] [class*="newsletter" i],
+html[data-cog-focus="on"][data-cog-level="med"] [id*="newsletter" i] {
+  display: none !important;
+}
+
+/* Strong: also hide footer (aggressive mode) */
+html[data-cog-focus="on"][data-cog-level="strong"] footer {
+  display: none !important;
+}
+
+/* ===== Center + readable width ===== */
+html[data-cog-focus="on"] main,
+html[data-cog-focus="on"] article,
+html[data-cog-focus="on"] [role="main"] {
+  max-width: 900px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+/* Strong: narrower for focus */
+html[data-cog-focus="on"][data-cog-level="strong"] main,
+html[data-cog-focus="on"][data-cog-level="strong"] article,
+html[data-cog-focus="on"][data-cog-level="strong"] [role="main"] {
+  max-width: 760px !important;
+}
+
+/* ===== Reading ease ===== */
+html[data-cog-focus="on"] body {
+  line-height: 1.6 !important;
+}
+
+html[data-cog-focus="on"][data-cog-level="mild"] body { line-height: 1.55 !important; }
+html[data-cog-focus="on"][data-cog-level="med"] body { line-height: 1.7 !important; }
+html[data-cog-focus="on"][data-cog-level="strong"] body { line-height: 1.85 !important; }
+
+html[data-cog-focus="on"] p {
+  margin-top: 0.8em !important;
+  margin-bottom: 0.8em !important;
+}
+
+/* ===== Reduce motion ===== */
+html[data-cog-focus="on"] * {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* ===== Clear focus outline ===== */
+html[data-cog-focus="on"] :focus {
+  outline: 3px solid rgba(255, 165, 0, 0.9) !important;
+  outline-offset: 2px !important;
+}
