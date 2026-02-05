@@ -1,0 +1,193 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width,initial-scale=1" />
+		<title>Adaptive A11y Setup</title>
+		<style>
+			:root {
+				color-scheme: light;
+			}
+			body {
+				font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+				margin: 24px;
+				background: #f7f7f9;
+				color: #111;
+			}
+			.container {
+				max-width: 720px;
+				margin: 0 auto;
+				background: #fff;
+				border: 1px solid #e8e8ef;
+				border-radius: 16px;
+				padding: 20px 22px;
+				box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+			}
+			h1 {
+				font-size: 20px;
+				margin: 0 0 6px 0;
+			}
+			.sub {
+				font-size: 13px;
+				color: #666;
+				margin-bottom: 16px;
+			}
+			.question {
+				margin: 14px 0;
+				padding: 12px 12px;
+				border-radius: 12px;
+				border: 1px solid #f0f0f5;
+				background: #fafafb;
+			}
+			.question label {
+				font-weight: 600;
+				display: block;
+				margin-bottom: 8px;
+			}
+			select {
+				padding: 8px 10px;
+				border-radius: 10px;
+				border: 1px solid #ddd;
+				background: #fff;
+				width: 240px;
+			}
+			.actions {
+				display: flex;
+				gap: 10px;
+				margin-top: 16px;
+			}
+			button {
+				padding: 10px 14px;
+				border-radius: 10px;
+				border: 1px solid #ddd;
+				background: #111;
+				color: #fff;
+				font-weight: 600;
+				cursor: pointer;
+			}
+			.secondary {
+				background: #fff;
+				color: #111;
+			}
+			.status {
+				font-size: 12px;
+				color: #1f6feb;
+				margin-top: 10px;
+				min-height: 16px;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<h1>Quick Setup</h1>
+			<div class="sub">Answer a few questions so the extension can personalize your experience.</div>
+
+			<form id="questionnaire">
+				<div class="question">
+					<label for="q1">1. Do busy pages with lots of banners, animations, or popups make it hard to focus?</label>
+					<select id="q1" name="q1">
+						<option value="">Select…</option>
+						<option value="yes">Yes</option>
+						<option value="sometimes">Sometimes</option>
+						<option value="no">No</option>
+					</select>
+				</div>
+
+				<div class="question">
+					<label for="q2">2. Do you prefer interfaces that guide you step-by-step?</label>
+					<select id="q2" name="q2">
+						<option value="">Select…</option>
+						<option value="yes">Yes</option>
+						<option value="neutral">Neutral</option>
+						<option value="no">No</option>
+					</select>
+				</div>
+
+				<div class="question">
+					<label for="q3">3. Do you lose track of where you were on a page after scrolling?</label>
+					<select id="q3" name="q3">
+						<option value="">Select…</option>
+						<option value="often">Often</option>
+						<option value="sometimes">Sometimes</option>
+						<option value="rarely">Rarely</option>
+					</select>
+				</div>
+
+				<div class="question">
+					<label for="q4">4. Do you find dense blocks of text difficult or tiring to read?</label>
+					<select id="q4" name="q4">
+						<option value="">Select…</option>
+						<option value="yes">Yes</option>
+						<option value="sometimes">Sometimes</option>
+						<option value="no">No</option>
+					</select>
+				</div>
+
+				<div class="question">
+					<label for="q5">5. Would you like text to be easier to read with larger spacing and simpler formatting?</label>
+					<select id="q5" name="q5">
+						<option value="">Select…</option>
+						<option value="yes">Yes</option>
+						<option value="no">No</option>
+					</select>
+				</div>
+
+				<div class="question">
+					<label for="q6">6. Do you prefer summaries before long text?</label>
+					<select id="q6" name="q6">
+						<option value="">Select…</option>
+						<option value="yes">Yes</option>
+						<option value="no">No</option>
+					</select>
+				</div>
+
+				<div class="question">
+					<label for="q7">7. Do animations or moving elements distract or overwhelm you?</label>
+					<select id="q7" name="q7">
+						<option value="">Select…</option>
+						<option value="yes">Yes</option>
+						<option value="sometimes">Sometimes</option>
+						<option value="no">No</option>
+					</select>
+				</div>
+
+				<div class="question">
+					<label for="q8">8. Do bright or high-contrast screens cause eye strain?</label>
+					<select id="q8" name="q8">
+						<option value="">Select…</option>
+						<option value="yes">Yes</option>
+						<option value="sometimes">Sometimes</option>
+						<option value="no">No</option>
+					</select>
+				</div>
+
+				<div class="question">
+					<label for="q9">9. Do you want reminders of your last action or progress?</label>
+					<select id="q9" name="q9">
+						<option value="">Select…</option>
+						<option value="yes">Yes</option>
+						<option value="no">No</option>
+					</select>
+				</div>
+
+				<div class="question">
+					<label for="q10">10. When under pressure, do you prefer fewer choices and a clear main action?</label>
+					<select id="q10" name="q10">
+						<option value="">Select…</option>
+						<option value="yes">Yes</option>
+						<option value="sometimes">Sometimes</option>
+						<option value="no">No</option>
+					</select>
+				</div>
+
+				<div class="actions">
+					<button type="submit">Save</button>
+					<button type="button" id="skipBtn" class="secondary">Skip for now</button>
+				</div>
+				<div id="status" class="status"></div>
+			</form>
+		</div>
+
+		<script src="onboarding.js"></script>
+	</body>
+</html>

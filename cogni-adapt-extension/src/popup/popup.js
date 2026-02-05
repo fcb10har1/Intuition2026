@@ -63,6 +63,48 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   const toggleBtn = document.getElementById("toggleBtn");
   const intensitySelect = document.getElementById("intensitySelect");
+  const aiStatusEl = document.getElementById("aiStatus");
+
+  // Update AI status
+  async function updateAIStatus() {
+    try {
+      const response = await chrome.runtime.sendMessage({ action: "checkAIHealth" });
+      const status = response?.status || "unknown";
+      
+      let text = "Offline";
+      let bg = "#fee2e2";
+      let color = "#991b1b";
+      
+      if (status === "connected") {
+        text = "✓ Connected";
+        bg = "#dcfce7";
+        color = "#166534";
+      } else if (status === "unavailable") {
+        text = "Using defaults";
+        bg = "#fef3c7";
+        color = "#92400e";
+      }
+      
+      if (aiStatusEl) {
+        aiStatusEl.textContent = text;
+        aiStatusEl.style.background = bg;
+        aiStatusEl.style.color = color;
+      }
+    } catch (e) {
+      console.warn("[Popup] AI health check error:", e.message);
+      if (aiStatusEl) {
+        aiStatusEl.textContent = "Using defaults";
+        aiStatusEl.style.background = "#fef3c7";
+        aiStatusEl.style.color = "#92400e";
+      }
+    }
+  }
+
+  // Initial check
+  await updateAIStatus();
+
+  // Recheck every 5 seconds
+  setInterval(updateAIStatus, 5000);
 
   // Toggle Focus Mode
   toggleBtn.addEventListener("click", async () => {
