@@ -36,19 +36,12 @@ function setUI({ focusEnabled, intensity }) {
 }
 
 // ---- Ensure content script + css are injected ----
-// This keeps Dev 2's content.js always present for messaging.
-// IMPORTANT: Dev 2 must create content.js + content.css with listeners.
+// This keeps the content script always present for messaging.
 async function ensureInjected(tabId) {
-  // Inject JS (safe if run multiple times; Dev 2 should guard with a global flag)
+  // Inject JS (safe if run multiple times; content script guards with a global flag)
   await chrome.scripting.executeScript({
     target: { tabId },
-    files: ["content.js"]
-  });
-
-  // Inject CSS (focus styles / intensity styles)
-  await chrome.scripting.insertCSS({
-    target: { tabId },
-    files: ["content.css"]
+    files: ["src/content/content_script.js"]
   });
 }
 
