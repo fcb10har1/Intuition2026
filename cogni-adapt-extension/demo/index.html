@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>INTUtion — Cognitive Overload Demo Page</title>
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">INTUtion</div>
+      <div class="tag">Demo Page • Dense Interface</div>
+    </div>
+
+    <nav class="topnav">
+      <a href="#">Home</a>
+      <a href="#">Explore</a>
+      <a href="#">Notifications <span class="badge">8</span></a>
+      <a href="#">Messages <span class="badge">12</span></a>
+      <a href="#" class="pill">URGENT: Update Profile</a>
+    </nav>
+
+    <div class="search">
+      <input placeholder="Search…" />
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="active">Overview</li>
+        <li>Tasks</li>
+        <li>Documents</li>
+        <li>Settings</li>
+        <li>Help</li>
+      </ul>
+
+      <div class="promo">
+        <b>Sponsored</b>
+        <p>Upgrade to “Premium Focus Pack” to boost productivity.</p>
+        <button>Learn more</button>
+      </div>
+
+      <div class="promo">
+        <b>Reminder</b>
+        <p>Your session will time out in 05:00 unless you continue.</p>
+        <button>Continue</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <section class="card">
+        <h1>Week 6: Dense Content + Actions</h1>
+        <p class="muted">
+          This page is intentionally cluttered to simulate cognitive overload.
+          Scroll up/down a few times and pause to trigger overload detection.
+        </p>
+      </section>
+
+      <section class="grid">
+        <section class="card">
+          <h2>Announcements</h2>
+
+          <div class="item">
+            <b>[Important]</b> Please read carefully before submission.
+            <p class="dense">
+              You must submit your work in the required format, ensure all required fields are completed, and upload documents
+              that are legible. Requests for extensions must be submitted at least 48 hours in advance; late requests may not be
+              accepted unless supported by official documentation.
+            </p>
+          </div>
+
+          <div class="item">
+            <b>[Action Required]</b> Consent form required.
+            <p class="dense">
+              File names must follow the format: COURSECODE_NAME_STUDENTID. Deviations may cause administrative delays. Refer to
+              the FAQ for examples. Ensure you address assumptions and implications in your final submission.
+            </p>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>To-Do</h2>
+          <ul class="todo">
+            <li><input type="checkbox" /> Upload PDF</li>
+            <li><input type="checkbox" /> Fill student ID</li>
+            <li><input type="checkbox" /> Select tutorial group</li>
+            <li><input type="checkbox" /> Submit form</li>
+          </ul>
+
+          <button class="primary">Continue</button>
+          <button class="danger">Delete Draft</button>
+          <p class="tiny muted">Deleting draft cannot be undone.</p>
+        </section>
+      </section>
+
+      <section class="card">
+        <h2>Submission Form</h2>
+        <div class="form">
+          <label>Upload PDF</label>
+          <input type="file" />
+
+          <label>Student ID</label>
+          <input type="text" placeholder="U23XXXXXX" />
+
+          <label>Tutorial Group</label>
+          <select>
+            <option>Choose…</option>
+            <option>T01</option>
+            <option>T02</option>
+            <option>T03</option>
+          </select>
+
+          <label>Comments (optional)</label>
+          <textarea rows="3" placeholder="Clarify anything…"></textarea>
+
+          <div class="row">
+            <button class="primary">Submit</button>
+            <button class="ghost" id="simplifyBtn" type="button">Simplify text</button>
+            <button class="ghost" id="resetBtn" type="button">Reset</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Rubric</h2>
+        <table>
+          <thead>
+            <tr><th>Criteria</th><th>Excellent</th><th>Good</th><th>Needs work</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Clarity</td><td>Structured and easy</td><td>Mostly clear</td><td>Confusing</td></tr>
+            <tr><td>Steps</td><td>Minimal steps</td><td>Some extra</td><td>Too many</td></tr>
+            <tr><td>Error rate</td><td>Few errors</td><td>Some errors</td><td>Many errors</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <footer class="footer muted">© INTUtion 2026 — demo page</footer>
+    </main>
+
+    <aside class="rightbar">
+      <div class="card">
+        <h3>Notifications</h3>
+        <div class="notif">🔔 Quiz closes soon</div>
+        <div class="notif">🔔 2 new messages</div>
+        <div class="notif">🔔 New discussion post</div>
+        <div class="notif">🔔 Update required</div>
+      </div>
+
+      <div class="ad">
+        <b>Sponsored</b>
+        <p>Watch “1-minute GPA hacks” now!</p>
+        <button>Watch</button>
+      </div>
+    </aside>
+  </div>
+
+  <script src="adapt.js"></script>
+</body>
+</html>
