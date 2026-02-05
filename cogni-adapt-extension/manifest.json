@@ -4,26 +4,25 @@
   "version": "0.1.0",
   "description": "AI-powered adaptive accessibility layer for reducing cognitive overload on dense web pages.",
 
-  "permissions": [
-    "storage",
-    "activeTab",
-    "scripting"
-  ],
+  "permissions": ["storage", "activeTab", "scripting"],
 
   "action": {
     "default_title": "Adaptive A11y",
-    "default_popup": "popup.html"
+    "default_popup": "src/popup/popup.html"
   },
+
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content/content_script.js"],
+      "run_at": "document_idle"
+    }
+  ],
 
   "web_accessible_resources": [
     {
-      "resources": [
-        "src/content/adapt/css/focus_mode.css"
-      ],
-      "matches": [
-        "<all_urls>"
-      ]
+      "resources": ["src/content/adapt/css/focus_mode.css"],
+      "matches": ["<all_urls>"]
     }
   ]
 }
-
