@@ -190,70 +190,71 @@
   }
 
   function applyAIRecommendations(recs) {
-    if (!recs) return;
+    try {
+      if (!recs) return;
 
-    const source = recs.source || "unknown";
-    const focusLevel = normalizeLevel(recs.focus_level || DEFAULT_LEVEL);
-    const shouldEnable = recs.focus_mode || recs.reduce_distractions;
+      const source = recs.source || "unknown";
+      const focusLevel = normalizeLevel(recs.focus_level || DEFAULT_LEVEL);
+      const shouldEnable = recs.focus_mode || recs.reduce_distractions;
 
-    // Track what's being applied for transparency
-    const appliedChanges = [];
-    const reasons = [];
+      // Track what's being applied for transparency
+      const appliedChanges = [];
+      const reasons = [];
 
-    // Determine primary reason from patterns
-    let primaryReason = "Optimizing your experience";
-    if (recs.detectedPatterns && recs.detectedPatterns.length > 0) {
-      const topPattern = recs.detectedPatterns.find(p => p.severity === 'high');
-      if (topPattern) {
-        primaryReason = topPattern.description;
-      } else {
-        primaryReason = recs.detectedPatterns[0].description;
+      // Determine primary reason from patterns
+      let primaryReason = "Optimizing your experience";
+      if (recs.detectedPatterns && recs.detectedPatterns.length > 0) {
+        const topPattern = recs.detectedPatterns.find(p => p.severity === 'high');
+        if (topPattern) {
+          primaryReason = topPattern.description;
+        } else {
+          primaryReason = recs.detectedPatterns[0].description;
+        }
       }
-    }
 
-    // ===== FOCUS MODE =====
-    if (shouldEnable) {
-      apply(true, focusLevel, true);
-      appliedChanges.push(`Focus Mode (${focusLevel})`);
-      
-      let reason = "Clutter & visual overload detected → Simplified interface";
-      if (recs.detectedPatterns) {
-        const thrashPattern = recs.detectedPatterns.find(p => p.pattern === 'Scroll Thrashing');
-        const overloadPattern = recs.detectedPatterns.find(p => p.pattern === 'Cognitive Overload');
-        if (thrashPattern) reason = `${thrashPattern.description} → Simplifying layout`;
-        else if (overloadPattern) reason = `${overloadPattern.description} → Focusing interface`;
+      // ===== FOCUS MODE =====
+      if (shouldEnable) {
+        apply(true, focusLevel, true);
+        appliedChanges.push(`Focus Mode (${focusLevel})`);
+        
+        let reason = "Clutter & visual overload detected → Simplified interface";
+        if (recs.detectedPatterns) {
+          const thrashPattern = recs.detectedPatterns.find(p => p.pattern === 'Scroll Thrashing');
+          const overloadPattern = recs.detectedPatterns.find(p => p.pattern === 'Cognitive Overload');
+          if (thrashPattern) reason = `${thrashPattern.description} → Simplifying layout`;
+          else if (overloadPattern) reason = `${overloadPattern.description} → Focusing interface`;
+        }
+        reasons.push(reason);
+        logChange("FOCUS_MODE", focusLevel, "Reduces distractions");
       }
-      reasons.push(reason);
-      logChange("FOCUS_MODE", focusLevel, "Reduces distractions");
-    }
 
-    // ===== READING EASE =====
-    if (recs.reading_ease) {
-      HTML.classList.add("assist-reading-ease");
-      appliedChanges.push("Reading Ease");
-      
-      let reason = "Dense text difficulty detected → Improved spacing & typography";
-      if (recs.detectedPatterns) {
-        const pausePattern = recs.detectedPatterns.find(p => p.pattern === 'Paused/Stuck');
-        if (pausePattern) reason = `${pausePattern.description} → Enhancing readability`;
+      // ===== READING EASE =====
+      if (recs.reading_ease) {
+        HTML.classList.add("assist-reading-ease");
+        appliedChanges.push("Reading Ease");
+        
+        let reason = "Dense text difficulty detected → Improved spacing & typography";
+        if (recs.detectedPatterns) {
+          const pausePattern = recs.detectedPatterns.find(p => p.pattern === 'Paused/Stuck');
+          if (pausePattern) reason = `${pausePattern.description} → Enhancing readability`;
+        }
+        reasons.push(reason);
+        logChange("READING_EASE", "enabled", "Larger fonts, better line-height");
       }
-      reasons.push(reason);
-      logChange("READING_EASE", "enabled", "Larger fonts, better line-height");
-    }
 
-    // ===== REDUCE DISTRACTIONS =====
-    if (recs.reduce_distractions) {
-      HTML.classList.add("assist-reduce-distractions");
-      appliedChanges.push("Reduce Distractions");
-      
-      let reason = "Motion sensitivity or distraction patterns → Hides ads & animated elements";
-      if (recs.detectedPatterns) {
-        const jitterPattern = recs.detectedPatterns.find(p => p.pattern === 'Scroll Jitter');
-        if (jitterPattern) reason = `${jitterPattern.description} → Removing motion triggers`;
+      // ===== REDUCE DISTRACTIONS =====
+      if (recs.reduce_distractions) {
+        HTML.classList.add("assist-reduce-distractions");
+        appliedChanges.push("Reduce Distractions");
+        
+        let reason = "Motion sensitivity or distraction patterns → Hides ads & animated elements";
+        if (recs.detectedPatterns) {
+          const jitterPattern = recs.detectedPatterns.find(p => p.pattern === 'Scroll Jitter');
+          if (jitterPattern) reason = `${jitterPattern.description} → Removing motion triggers`;
+        }
+        reasons.push(reason);
+        logChange("REDUCE_DISTRACTIONS", "enabled", "Ads, popups, animations hidden");
       }
-      reasons.push(reason);
-      logChange("REDUCE_DISTRACTIONS", "enabled", "Ads, popups, animations hidden");
-    }
 
     // ===== STEP BY STEP =====
     if (recs.step_by_step) {
@@ -302,6 +303,9 @@
     );
     for (const reason of reasons) {
       console.log(`  → ${reason}`);
+    }
+    } catch (error) {
+      console.error("[Content] Error in applyAIRecommendations:", error.message);
     }
   }
 
@@ -763,73 +767,105 @@
     detectDeviceHints();
 
     setInterval(async () => {
-      const t = performance.now();
+      try {
+        const t = performance.now();
 
-      monitorState.reversalTimes = monitorState.reversalTimes.filter((rt) => t - rt <= WINDOW_MS);
+        monitorState.reversalTimes = monitorState.reversalTimes.filter((rt) => t - rt <= WINDOW_MS);
 
-      if (monitorState.reversalTimes.length >= REVERSAL_CLUSTER) {
-        monitorState.score += REVERSAL_POINTS;
-        monitorState.reversalTimes.splice(0, Math.min(2, monitorState.reversalTimes.length));
+        if (monitorState.reversalTimes.length >= REVERSAL_CLUSTER) {
+          monitorState.score += REVERSAL_POINTS;
+          monitorState.reversalTimes.splice(0, Math.min(2, monitorState.reversalTimes.length));
+        }
+
+        const idleFor = t - monitorState.lastActionT;
+        if (idleFor >= IDLE_MS) {
+          monitorState.score += IDLE_POINTS;
+          monitorState.idlePeriods++;
+          monitorState.lastActionT = t - 2500;
+        }
+
+        // Analyze detailed interaction patterns with safe error handling
+        try {
+          analyzeClickPatterns(t);
+        } catch (e) {
+          console.warn("[Content] Error in analyzeClickPatterns:", e.message);
+        }
+        
+        try {
+          analyzeScrollJitter();
+        } catch (e) {
+          console.warn("[Content] Error in analyzeScrollJitter:", e.message);
+        }
+        
+        try {
+          analyzeMistypingPattern();
+        } catch (e) {
+          console.warn("[Content] Error in analyzeMistypingPattern:", e.message);
+        }
+        
+        try {
+          detectDeviceHints(); // Re-check every tick
+        } catch (e) {
+          console.warn("[Content] Error in detectDeviceHints:", e.message);
+        }
+
+        monitorState.score = Math.max(0, monitorState.score - DECAY);
+
+        // Periodically refresh AI recommendations based on new interaction data
+        await maybeRefreshAIRecommendations();
+      } catch (error) {
+        console.error("[Content] Monitoring loop error:", error.message);
+        // Loop continues running despite errors
       }
-
-      const idleFor = t - monitorState.lastActionT;
-      if (idleFor >= IDLE_MS) {
-        monitorState.score += IDLE_POINTS;
-        monitorState.idlePeriods++;
-        monitorState.lastActionT = t - 2500;
-      }
-
-      // Analyze detailed interaction patterns
-      analyzeClickPatterns(t);
-      analyzeScrollJitter();
-      analyzeMistypingPattern();
-      detectDeviceHints(); // Re-check every tick
-
-      monitorState.score = Math.max(0, monitorState.score - DECAY);
-
-      // Periodically refresh AI recommendations based on new interaction data
-      await maybeRefreshAIRecommendations();
     }, TICK_MS);
   }
 
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-    if (!msg) return;
+    try {
+      if (!msg) return;
 
-    // Handle action-based messages (for service worker)
-    if (msg.action === "getAIStatus") {
-      const aiStatus = window.__aiClient?.getAIStatus?.() || "unknown";
-      sendResponse({ status: aiStatus });
-      return true;
-    }
+      // Handle action-based messages (for service worker)
+      if (msg.action === "getAIStatus") {
+        const aiStatus = window.__aiClient?.getAIStatus?.() || "unknown";
+        sendResponse({ status: aiStatus });
+        return true;
+      }
 
-    // Handle legacy type-based messages (for popup)
-    if (typeof msg.type !== "string") return;
+      // Handle legacy type-based messages (for popup)
+      if (typeof msg.type !== "string") return;
 
-    if (msg.type === "TOGGLE_FOCUS") {
-      const enabled = !!msg.enabled;
-      const currentLevel = normalizeLevel(HTML.dataset.cogLevel);
+      if (msg.type === "TOGGLE_FOCUS") {
+        const enabled = !!msg.enabled;
+        const currentLevel = normalizeLevel(HTML.dataset.cogLevel);
 
-      // Update extension state and persist to storage
-      monitorState.extensionEnabled = enabled;
-      chrome.storage.sync.set({ focusEnabled: enabled });
+        // Update extension state and persist to storage
+        monitorState.extensionEnabled = enabled;
+        chrome.storage.sync.set({ focusEnabled: enabled });
 
-      apply(enabled, currentLevel, true);
+        apply(enabled, currentLevel, true);
 
-      if (sendResponse) sendResponse({ ok: true });
-      return true;
-    }
+        if (sendResponse) sendResponse({ ok: true });
+        return true;
+      }
 
-    if (msg.type === "SET_INTENSITY") {
-      const level = normalizeLevel(msg.level);
-      const enabled = HTML.dataset.cogFocus === "on";
+      if (msg.type === "SET_INTENSITY") {
+        const level = normalizeLevel(msg.level);
+        const enabled = HTML.dataset.cogFocus === "on";
 
-      apply(enabled, level, true);
+        apply(enabled, level, true);
 
-      if (sendResponse) sendResponse({ ok: true });
-      return true;
+        if (sendResponse) sendResponse({ ok: true });
+        return true;
+      }
+    } catch (error) {
+      console.error("[Content] Error handling message:", error.message);
+      if (sendResponse) sendResponse({ error: error.message });
     }
   });
 
-  loadInitialStateFromStorage();
+  loadInitialStateFromStorage().catch(e => {
+    console.error("[Content] Failed to load initial state:", e.message);
+    // Extension still starts even if initial load fails
+  });
   startInteractionMonitoring();
 })();
