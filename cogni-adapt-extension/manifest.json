@@ -5,15 +5,15 @@
   "description": "AI-powered adaptive accessibility layer for reducing cognitive overload on dense web pages.",
 
   "permissions": ["storage", "activeTab", "scripting"],
-  "host_permissions": ["<all_urls>"],
+
+  "background": {
+    "service_worker": "src/background/service_worker.js",
+    "type": "module"
+  },
 
   "action": {
     "default_title": "Adaptive A11y",
     "default_popup": "src/popup/popup.html"
-  },
-
-  "background": {
-    "service_worker": "src/background/service_worker.js"
   },
 
   "content_scripts": [
@@ -26,7 +26,21 @@
 
   "web_accessible_resources": [
     {
-      "resources": ["src/content/adapt/css/*.css"],
+      "resources": [
+        "src/content/adapt/css/base.css",
+        "src/content/adapt/css/orb.css",
+        "src/content/adapt/css/focus_overlay.css",
+        "src/content/adapt/css/cursor.css",
+
+        "src/content/adapt/css/focus_mode.css",
+        "src/content/adapt/css/reduce_distractions.css",
+        "src/content/adapt/css/reading_ease.css",
+        "src/content/adapt/css/step_by_step.css",
+        "src/content/adapt/css/time_control.css",
+        "src/content/adapt/css/focus_guide.css",
+        "src/content/adapt/css/error_support.css",
+        "src/content/adapt/css/dark_mode.css"
+      ],
       "matches": ["<all_urls>"]
     }
   ]
