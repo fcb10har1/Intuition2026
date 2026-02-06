@@ -20,8 +20,8 @@
     },
     CURSOR_SIZES: {
       normal: { overlay: false },
-      enhanced: { overlay: true, size: '48px' },
-      large: { overlay: true, size: '72px' }
+      enhanced: { overlay: true, size: '32px' },
+      large: { overlay: true, size: '48px' }
     },
     CURSOR_COLOURS: {
       blue: '#2563eb',
@@ -42,10 +42,10 @@
     distractionCleaner: false,
     cursorSize: CONFIG.CURSOR_DEFAULTS.size,
     cursorColour: CONFIG.CURSOR_DEFAULTS.colour,
-    hiddenElements: [],
+    hiddenElements: [], // Track elements hidden by distraction cleaner
   };
 
-  let actionHistory = [];
+  let actionHistory = []; // Stack for undo
 
   async function loadSettings() {
     try {
@@ -80,7 +80,7 @@
 
     switch (last.type) {
       case 'toggle_mode':
-        toggleMode(last.mode, true);
+        toggleMode(last.mode, true); // Don't record undo itself
         break;
       case 'cursor_change':
         restoreCursor(last.previous);
@@ -89,15 +89,18 @@
   }
 
   function reset() {
+    // Revert all modes
     state.focusMode && toggleMode('focus', true);
     state.dyslexiaMode && toggleMode('dyslexia', true);
     state.largeUIMode && toggleMode('largeUI', true);
     state.distractionCleaner && toggleMode('distractionCleaner', true);
 
+    // Restore cursor to defaults
     state.cursorSize = CONFIG.CURSOR_DEFAULTS.size;
     state.cursorColour = CONFIG.CURSOR_DEFAULTS.colour;
     applyCursorStyles();
 
+    // Clear history
     actionHistory = [];
   }
 
@@ -345,11 +348,38 @@
         transform: scale(0.98);
       }
 
-      /* === MODES STYLING === */
-      html.${CONFIG.PREFIX}-focus-mode {
-        filter: brightness(0.95);
+      /* === CUSTOM CURSOR OVERLAY === */
+      .${CONFIG.PREFIX}-cursor-overlay {
+        position: fixed;
+        width: var(--cursor-size, 32px);
+        height: var(--cursor-size, 32px);
+        border: 2px solid;
+        border-color: var(--cursor-colour, #2563eb);
+        border-radius: 50%;
+        pointer-events: none;
+        z-index: ${CONFIG.Z_INDEX - 2};
+        display: none;
+        opacity: 0.8;
+        mix-blend-mode: multiply;
       }
 
+      .${CONFIG.PREFIX}-cursor-overlay.active {
+        display: block;
+      }
+
+      /* === MODES STYLING === */
+      
+      /* Focus Mode */
+      html.${CONFIG.PREFIX}-focus-mode {
+        filter: none;
+      }
+
+      html.${CONFIG.PREFIX}-focus-mode::before {
+        content: '';
+        display: none;
+      }
+
+      /* Dyslexia Mode */
       html.${CONFIG.PREFIX}-dyslexia-mode {
         font-family: 'Segoe UI', 'Arial', sans-serif;
         letter-spacing: 0.05em;
@@ -360,6 +390,7 @@
         background-color: #fffcf0 !important;
       }
 
+      /* Large UI Mode */
       html.${CONFIG.PREFIX}-large-ui-mode button,
       html.${CONFIG.PREFIX}-large-ui-mode [role="button"],
       html.${CONFIG.PREFIX}-large-ui-mode a,
@@ -369,11 +400,12 @@
         font-size: 16px !important;
       }
 
+      /* Distraction Cleaner */
       html.${CONFIG.PREFIX}-distraction-mode .${CONFIG.PREFIX}-hidden {
         display: none !important;
       }
 
-      /* === TOAST === */
+      /* Tooltip / Feedback */
       .${CONFIG.PREFIX}-toast {
         position: fixed;
         bottom: 100px;
@@ -452,10 +484,15 @@
   // ============================================================================
 
   const DISTRACTION_SELECTORS = [
+    // Ads
     '[class*="ad-"], [id*="ad-"], .advertisement, .advert',
+    // Pop-ups / modals
     '[class*="modal"], [class*="popup"], [class*="overlay"]',
+    // Newsletter
     '.newsletter, .email-signup, .subscribe',
+    // Social buttons
     '.social, [class*="share"]',
+    // Tracking pixels
     '[src*="analytics"], [src*="tracking"]'
   ];
 
@@ -488,93 +525,39 @@
   // CURSOR CUSTOMIZATION
   // ============================================================================
 
-  let cursorOverlay = null;
-  let rafId = null;
-  let lastMousePos = { x: 0, y: 0 };
-
   function applyCursorStyles() {
     const htmlEl = document.documentElement;
 
     if (state.cursorSize === 'normal') {
-      // Remove overlay, restore native cursor
-      hideCursorOverlay();
+      // Remove cursor overlay
+      const overlay = document.getElementById(`${CONFIG.PREFIX}-cursor-overlay`);
+      if (overlay) overlay.classList.remove('active');
       htmlEl.style.cursor = 'auto';
     } else {
-      // Hide native cursor, show magnified overlay instead
-      htmlEl.style.cursor = 'none';
-      showCursorOverlay(state.cursorSize, state.cursorColour);
-    }
-  }
-
-  function showCursorOverlay(size, colour) {
-    if (!cursorOverlay) {
-      cursorOverlay = document.createElement('div');
-      cursorOverlay.id = `${CONFIG.PREFIX}-cursor-magnifier`;
-      cursorOverlay.style.cssText = `
-        position: fixed;
-        pointer-events: none;
-        z-index: ${CONFIG.Z_INDEX - 2};
-        display: none;
-      `;
-      document.body.appendChild(cursorOverlay);
-
-      // Track mouse position globally
-      document.addEventListener('mousemove', (e) => {
-        lastMousePos.x = e.clientX;
-        lastMousePos.y = e.clientY;
-      });
-    }
-
-    cursorOverlay.style.display = 'block';
-
-    // Set size for magnified arrow
-    const sizes = {
-      'enhanced': 48,
-      'large': 72
-    };
-    const pixelSize = sizes[size] || 48;
-    const arrowColour = CONFIG.CURSOR_COLOURS[colour] || '#2563eb';
-
-    // Stroke width scales proportionally (2px @ 48px, ~3px @ 72px)
-    const strokeWidth = (2 * pixelSize) / 48;
-
-    // SVG arrow - clean standard Chrome pointer, simple and functional
-    // 48x48 for Enhanced, 72x72 for Large
-    const arrowSVG = `
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 32" width="${pixelSize}" height="${pixelSize}" preserveAspectRatio="xMinYMin meet">
-        <path d="M 0 0 L 0 22 L 4 19 L 8 28 L 12 25 L 8 16 L 13 6 Z" 
-              fill="${arrowColour}" 
-              stroke="#111111" 
-              stroke-width="${strokeWidth}"
-              stroke-linejoin="round"
-              stroke-linecap="round"/>
-      </svg>
-    `;
-
-    cursorOverlay.innerHTML = arrowSVG;
-
-    // Start RAF loop for smooth tracking
-    if (!rafId) {
-      function updateCursorPosition() {
-        if (cursorOverlay && cursorOverlay.style.display === 'block') {
-          // Position so arrow tip aligns with actual cursor position
-          cursorOverlay.style.left = (lastMousePos.x) + 'px';
-          cursorOverlay.style.top = (lastMousePos.y) + 'px';
-        }
-        rafId = requestAnimationFrame(updateCursorPosition);
+      // Use custom cursor overlay
+      let overlay = document.getElementById(`${CONFIG.PREFIX}-cursor-overlay`);
+      if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = `${CONFIG.PREFIX}-cursor-overlay`;
+        overlay.className = `${CONFIG.PREFIX}-cursor-overlay active`;
+        document.body.appendChild(overlay);
+        trackMouseForCursor(overlay);
       }
-      rafId = requestAnimationFrame(updateCursorPosition);
+
+      overlay.classList.add('active');
+      const sizeData = CONFIG.CURSOR_SIZES[state.cursorSize];
+      overlay.style.setProperty('--cursor-size', sizeData.size);
+      overlay.style.setProperty('--cursor-colour', CONFIG.CURSOR_COLOURS[state.cursorColour]);
+      htmlEl.style.cursor = 'none';
     }
   }
 
-  function hideCursorOverlay() {
-    if (cursorOverlay) {
-      cursorOverlay.style.display = 'none';
-    }
-    if (rafId) {
-      cancelAnimationFrame(rafId);
-      rafId = null;
-    }
+  function trackMouseForCursor(overlay) {
+    document.addEventListener('mousemove', (e) => {
+      const size = parseFloat(overlay.style.getPropertyValue('--cursor-size') || '32px');
+      overlay.style.left = (e.clientX - size / 2) + 'px';
+      overlay.style.top = (e.clientY - size / 2) + 'px';
+    });
   }
 
   function setCursorSize(size) {
@@ -645,20 +628,33 @@
     panel.innerHTML = `
       <div class="${CONFIG.PREFIX}-panel-header">
         <div class="${CONFIG.PREFIX}-panel-title">Accessibility</div>
-        <button class="${CONFIG.PREFIX}-panel-close" aria-label="Close">×</button>
+        <button class="${CONFIG.PREFIX}-panel-close" aria-label="Close">
+          ×
+        </button>
       </div>
 
       <div class="${CONFIG.PREFIX}-panel-body">
+        
+        <!-- Modes Section -->
         <div class="${CONFIG.PREFIX}-section">
           <div class="${CONFIG.PREFIX}-label">Modes</div>
           <div class="${CONFIG.PREFIX}-mode-grid">
-            <button class="${CONFIG.PREFIX}-mode-btn ${state.focusMode ? 'active' : ''}" data-mode="focus">Focus</button>
-            <button class="${CONFIG.PREFIX}-mode-btn ${state.dyslexiaMode ? 'active' : ''}" data-mode="dyslexia">Dyslexia</button>
-            <button class="${CONFIG.PREFIX}-mode-btn ${state.largeUIMode ? 'active' : ''}" data-mode="largeUI">Large UI</button>
-            <button class="${CONFIG.PREFIX}-mode-btn ${state.distractionCleaner ? 'active' : ''}" data-mode="distractionCleaner">Clean</button>
+            <button class="${CONFIG.PREFIX}-mode-btn ${state.focusMode ? 'active' : ''}" data-mode="focus" aria-label="Toggle Focus Mode">
+              Focus
+            </button>
+            <button class="${CONFIG.PREFIX}-mode-btn ${state.dyslexiaMode ? 'active' : ''}" data-mode="dyslexia" aria-label="Toggle Dyslexia Mode">
+              Dyslexia
+            </button>
+            <button class="${CONFIG.PREFIX}-mode-btn ${state.largeUIMode ? 'active' : ''}" data-mode="largeUI" aria-label="Toggle Large UI">
+              Large UI
+            </button>
+            <button class="${CONFIG.PREFIX}-mode-btn ${state.distractionCleaner ? 'active' : ''}" data-mode="distractionCleaner" aria-label="Toggle Distraction Cleaner">
+              Clean
+            </button>
           </div>
         </div>
 
+        <!-- Cursor Size -->
         <div class="${CONFIG.PREFIX}-section">
           <div class="${CONFIG.PREFIX}-label">Cursor Size</div>
           <div class="${CONFIG.PREFIX}-select">
@@ -668,6 +664,7 @@
           </div>
         </div>
 
+        <!-- Cursor Colour -->
         <div class="${CONFIG.PREFIX}-section">
           <div class="${CONFIG.PREFIX}-label">Cursor Colour</div>
           <div class="${CONFIG.PREFIX}-select">
@@ -677,12 +674,14 @@
           </div>
         </div>
 
+        <!-- Actions -->
         <div class="${CONFIG.PREFIX}-section">
           <div class="${CONFIG.PREFIX}-action-group">
             <button class="${CONFIG.PREFIX}-action-btn" data-action="undo">Undo</button>
             <button class="${CONFIG.PREFIX}-action-btn" data-action="reset">Reset</button>
           </div>
         </div>
+
       </div>
     `;
 
@@ -691,20 +690,31 @@
   }
 
   function attachPanelListeners(panel) {
+    // Close button
     panel.querySelector(`.${CONFIG.PREFIX}-panel-close`).addEventListener('click', hidePanel);
 
+    // Mode buttons
     panel.querySelectorAll(`[data-mode]`).forEach(btn => {
-      btn.addEventListener('click', () => toggleMode(btn.dataset.mode));
+      btn.addEventListener('click', () => {
+        toggleMode(btn.dataset.mode);
+      });
     });
 
+    // Cursor size
     panel.querySelectorAll(`[data-cursor-size]`).forEach(btn => {
-      btn.addEventListener('click', () => setCursorSize(btn.dataset.cursorSize));
+      btn.addEventListener('click', () => {
+        setCursorSize(btn.dataset.cursorSize);
+      });
     });
 
+    // Cursor colour
     panel.querySelectorAll(`[data-cursor-colour]`).forEach(btn => {
-      btn.addEventListener('click', () => setCursorColour(btn.dataset.cursorColour));
+      btn.addEventListener('click', () => {
+        setCursorColour(btn.dataset.cursorColour);
+      });
     });
 
+    // Actions
     panel.querySelector(`[data-action="undo"]`).addEventListener('click', () => {
       undo();
       updatePanelUI();
@@ -721,15 +731,18 @@
     const panel = document.getElementById(`${CONFIG.PREFIX}-panel`);
     if (!panel) return;
 
+    // Update mode buttons
     panel.querySelector(`[data-mode="focus"]`).classList.toggle('active', state.focusMode);
     panel.querySelector(`[data-mode="dyslexia"]`).classList.toggle('active', state.dyslexiaMode);
     panel.querySelector(`[data-mode="largeUI"]`).classList.toggle('active', state.largeUIMode);
     panel.querySelector(`[data-mode="distractionCleaner"]`).classList.toggle('active', state.distractionCleaner);
 
+    // Update cursor size buttons
     panel.querySelectorAll(`[data-cursor-size]`).forEach(btn => {
       btn.classList.toggle('active', btn.dataset.cursorSize === state.cursorSize);
     });
 
+    // Update cursor colour buttons
     panel.querySelectorAll(`[data-cursor-colour]`).forEach(btn => {
       btn.classList.toggle('active', btn.dataset.cursorColour === state.cursorColour);
     });
@@ -767,10 +780,12 @@
 
     orb.addEventListener('click', togglePanel);
 
+    // Close panel on ESC
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') hidePanel();
     });
 
+    // Close panel on outside click
     document.addEventListener('click', (e) => {
       if (!e.target.closest(`#${CONFIG.PREFIX}-orb`) && !e.target.closest(`#${CONFIG.PREFIX}-panel`)) {
         hidePanel();
@@ -785,13 +800,20 @@
   // ============================================================================
 
   async function init() {
+    // Prevent double injection
     if (window.__A11Y_INJECTED__) return;
     window.__A11Y_INJECTED__ = true;
 
+    // Load settings
     await loadSettings();
+
+    // Inject styles
     injectStyleSheet();
+
+    // Create UI
     createOrb();
 
+    // Apply saved settings
     if (state.focusMode) document.documentElement.classList.add(`${CONFIG.PREFIX}-focus-mode`);
     if (state.dyslexiaMode) document.documentElement.classList.add(`${CONFIG.PREFIX}-dyslexia-mode`);
     if (state.largeUIMode) document.documentElement.classList.add(`${CONFIG.PREFIX}-large-ui-mode`);
@@ -800,11 +822,13 @@
       document.documentElement.classList.add(`${CONFIG.PREFIX}-distraction-mode`);
     }
 
+    // Apply cursor settings
     applyCursorStyles();
 
     console.log('Accessibility layer initialized');
   }
 
+  // Start when DOM is ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {
