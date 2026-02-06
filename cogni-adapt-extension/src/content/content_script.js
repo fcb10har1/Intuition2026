@@ -255,72 +255,78 @@
 
     cursorOverlay.style.display = 'block';
 
-    const sizes = { 'enhanced': 32, 'large': 48 };
-    const pixelSize = sizes[size] || 32;
+    const sizes = { 'enhanced': 40, 'large': 56 };
+    const pixelSize = sizes[size] || 40;
     const cursorColour = CONFIG.CURSOR_COLOURS[colour] || '#2563eb';
-    const strokeWidth = size === 'large' ? 2.5 : 2;
 
-    // Proper chunky pointing hand cursor matching reference
-    const pointingHandSVG = `
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 40" width="${pixelSize}" height="${Math.round(pixelSize * 1.25)}" preserveAspectRatio="xMidYMid meet" style="position:absolute; left:0; top:0;">
-        <!-- Index finger pointing up (main) -->
-        <path d="M 16 2 L 22 2 L 22 14 Q 22 18 18 20 L 14 20 Q 10 18 10 14 L 10 8 L 16 2" 
+    // Clip art style pointing hand cursor - thick outline, rounded
+    const handCursorSVG = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 50" width="${pixelSize}" height="${Math.round(pixelSize * 1.25)}" preserveAspectRatio="xMidYMid meet" style="position:absolute; left:0; top:0;">
+        <!-- Index finger -->
+        <path d="M 18 2 Q 20 2 22 3 Q 25 5 25 10 L 25 20 Q 25 24 22 26 L 18 26 Q 15 24 15 20 L 15 5 Q 15 2 18 2" 
               fill="${cursorColour}" 
               stroke="#1a1a1a" 
-              stroke-width="${strokeWidth}"
+              stroke-width="2.2"
               stroke-linejoin="round"
               stroke-linecap="round"/>
         
-        <!-- Middle finger curled -->
-        <path d="M 10 14 Q 8 16 7 19 Q 7 21 9 22 Q 11 21 12 18" 
+        <!-- Middle finger -->
+        <path d="M 26 10 Q 28 10 30 11 Q 32 13 32 18 Q 32 22 30 24 Q 28 25 26 25 L 26 15" 
               fill="${cursorColour}" 
               stroke="#1a1a1a" 
-              stroke-width="${strokeWidth}"
+              stroke-width="2.2"
               stroke-linejoin="round"
               stroke-linecap="round"/>
         
-        <!-- Ring finger curled -->
-        <path d="M 26 14 Q 28 16 29 19 Q 29 21 27 22 Q 25 21 24 18" 
+        <!-- Ring finger -->
+        <path d="M 32 18 Q 34 18 35 19 Q 37 21 37 25 Q 37 28 35 29 Q 33 30 31 30 L 31 22" 
               fill="${cursorColour}" 
               stroke="#1a1a1a" 
-              stroke-width="${strokeWidth}"
+              stroke-width="2.2"
               stroke-linejoin="round"
               stroke-linecap="round"/>
         
-        <!-- Pinky finger curled -->
-        <path d="M 24 18 Q 26 20 27 23 Q 27 25 25 25 Q 23 24 22 21" 
+        <!-- Pinky finger -->
+        <path d="M 37 25 Q 38 26 38 28 Q 38 31 36 32 Q 34 33 32 33 L 32 27" 
               fill="${cursorColour}" 
               stroke="#1a1a1a" 
-              stroke-width="${strokeWidth}"
+              stroke-width="2.2"
               stroke-linejoin="round"
               stroke-linecap="round"/>
         
-        <!-- Thumb on left -->
-        <path d="M 10 14 Q 6 14 4 16 Q 2 18 4 20 Q 8 19 10 16" 
+        <!-- Thumb -->
+        <path d="M 15 18 Q 12 20 10 23 Q 8 25 10 28 Q 13 29 16 26 L 16 22" 
               fill="${cursorColour}" 
               stroke="#1a1a1a" 
-              stroke-width="${strokeWidth}"
+              stroke-width="2.2"
               stroke-linejoin="round"
               stroke-linecap="round"/>
         
-        <!-- Palm/base joining everything -->
-        <path d="M 10 20 Q 8 24 10 28 Q 14 32 20 32 Q 26 32 30 28 Q 32 24 30 20 Q 24 22 20 22 Q 14 22 10 20" 
-              fill="${cursorColour}" 
+        <!-- Palm/base -->
+        <ellipse cx="22" cy="33" rx="12" ry="10" 
+                 fill="${cursorColour}" 
+                 stroke="#1a1a1a" 
+                 stroke-width="2.2"
+                 stroke-linejoin="round"/>
+        
+        <!-- Connect palm to fingers -->
+        <path d="M 15 26 L 16 32 L 32 33 L 32 27" 
+              fill="none"
               stroke="#1a1a1a" 
-              stroke-width="${strokeWidth}"
+              stroke-width="2.2"
               stroke-linejoin="round"
               stroke-linecap="round"/>
       </svg>
     `;
 
-    cursorOverlay.innerHTML = pointingHandSVG;
+    cursorOverlay.innerHTML = handCursorSVG;
 
     if (!rafId) {
       function updateCursorPosition() {
         if (cursorOverlay && cursorOverlay.style.display === 'block') {
           // Position so index finger tip aligns with cursor
-          cursorOverlay.style.left = (lastMousePos.x - pixelSize * 0.35) + 'px';
-          cursorOverlay.style.top = (lastMousePos.y - pixelSize * 0.1) + 'px';
+          cursorOverlay.style.left = (lastMousePos.x - pixelSize * 0.3) + 'px';
+          cursorOverlay.style.top = (lastMousePos.y - pixelSize * 0.08) + 'px';
         }
         rafId = requestAnimationFrame(updateCursorPosition);
       }
@@ -451,6 +457,9 @@
   }
 
   function createOrb() {
+    // Prevent duplicate orbs
+    if (document.getElementById(`${CONFIG.PREFIX}-orb`)) return;
+    
     const orb = document.createElement('button');
     orb.id = `${CONFIG.PREFIX}-orb`;
     orb.className = `${CONFIG.PREFIX}-orb`;
@@ -544,8 +553,9 @@
     applyCursorStyles();
   }
 
+  // Only call init once
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded', init, { once: true });
   } else {
     init();
   }
