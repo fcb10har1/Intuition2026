@@ -346,6 +346,69 @@
       btn.addEventListener('click', () => setCursorColour(btn.dataset.cursorColour));
     });
   }
+  
+  function detectDeviceHints() {
+    // Detect keyboard-only usage (no mouse/touch events for X seconds)
+    if (monitorState.mouseEvents === 0 && monitorState.keyboardEvents > 5) {
+      monitorState.usesKeyboardOnly = true;
+    }
+    
+    // Detect screen reader via common ARIA attributes
+    const hasAriaLive = document.querySelector('[aria-live]');
+    const hasAriaLabel = document.querySelectorAll('[aria-label]').length > 5;
+    if (hasAriaLive || hasAriaLabel) {
+      monitorState.usesScreenReader = true;
+    }
+    
+    // Detect reduced motion preference
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      monitorState.prefersReducedMotion = true;
+    }
+    
+    // Detect system font scaling
+    const htmlFontSize = parseInt(window.getComputedStyle(document.documentElement).fontSize);
+    monitorState.systemFontScale = htmlFontSize / 16; // 16px is default
+    
+    // Detect zoom level (device pixel ratio may indicate user zoom)
+    monitorState.zoomLevel = window.devicePixelRatio || 1;
+  }
+  
+  function analyzeClickPatterns(deltaTime) {
+    // Detect rage clicks: 3+ clicks in quick succession (< 500ms apart)
+    const recentRageClicks = monitorState.rageClickTimes.filter(
+      t => deltaTime - t < 2000
+    );
+    if (recentRageClicks.length > 0) {
+      monitorState.score += Math.min(5, recentRageClicks.length);
+    }
+    monitorState.rageClickTimes = recentRageClicks;
+  }
+  
+  function analyzeScrollJitter() {
+    // Filter scroll jitter events from last 2 seconds
+    const now = performance.now();
+    monitorState.scrollJitterEvents = monitorState.scrollJitterEvents.filter(
+      t => now - t < 2000
+    );
+    
+    // If many small scroll events, it's jittery (sign of lack of control)
+    if (monitorState.scrollJitterEvents.length > 4) {
+      monitorState.score += 3;
+    }
+  }
+  
+  function analyzeMistypingPattern() {
+    // Keep last 20 backspace events
+    if (monitorState.mistypingPattern.length > 20) {
+      monitorState.mistypingPattern.shift();
+    }
+    
+    // High backspace rate = typing errors/uncertainty
+    const backspaceRatio = monitorState.backspaceCount / (monitorState.keyboardEvents || 1);
+    if (backspaceRatio > 0.15) { // > 15% backspaces = high error rate
+      monitorState.score += 8;
+    }
+  }
 
   function updatePanelUI() {
     const panel = document.getElementById(`${CONFIG.PREFIX}-panel`);
