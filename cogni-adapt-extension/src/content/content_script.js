@@ -1,294 +1,428 @@
 /**
- * Accessibility Layer - Content Script (Complete Rewrite)
- * Professional, minimal, functional UI injected into webpages
+ * Accessibility Layer - Content Script
+ * Cursor magnification and control orb
  */
 
 (() => {
-  // Prevent double injection
-  if (window.__COGNI_FOCUS_INIT__) return;
-  window.__COGNI_FOCUS_INIT__ = true;
+  'use strict';
 
-  const HTML = document.documentElement;
-  const STYLE_ID = "cogni-focus-style";
-  const TOAST_ID = "cogni-focus-toast";
+  if (window.__A11Y_INJECTED__) return;
+  window.__A11Y_INJECTED__ = true;
 
-  const DEFAULT_LEVEL = "med";
-
-  // Interaction tracking for AI context
-  const monitorState = {
-    score: 0,
-    scrollReversals: 0,
-    idlePeriods: 0,
-    lastActionT: performance.now(),
-    lastScrollY: window.scrollY,
-    lastDir: 0,
-    reversalTimes: [],
-    lastAIAdjustT: 0,
-    aiClient: window.__aiClient
+  const CONFIG = {
+    PREFIX: 'a11y',
+    STORAGE_KEY: 'a11y_settings',
+    Z_INDEX: 2147483640,
+    CURSOR_DEFAULTS: {
+      size: 'normal',
+      colour: 'blue'
+    },
+    CURSOR_COLOURS: {
+      blue: '#2563eb',
+      teal: '#0d9488',
+      purple: '#7c3aed',
+      coral: '#f97316'
+    }
   };
 
-  function normalizeLevel(level) {
-    if (level === "mild" || level === "med" || level === "strong") {
-      return level;
-    }
-    return DEFAULT_LEVEL;
-  }
+  let state = {
+    cursorSize: CONFIG.CURSOR_DEFAULTS.size,
+    cursorColour: CONFIG.CURSOR_DEFAULTS.colour,
+  };
 
-  function injectCssOnce() {
-    if (document.getElementById(STYLE_ID)) return;
-
-    const link = document.createElement("link");
-    link.id = STYLE_ID;
-    link.rel = "stylesheet";
-    link.type = "text/css";
-
-    link.href = chrome.runtime.getURL(
-      "src/content/adapt/css/focus_mode.css"
-    );
-
-    (document.head || document.documentElement).appendChild(link);
-  }
-
-  function setFocusEnabled(enabled) {
-    HTML.dataset.cogFocus = enabled ? "on" : "off";
-  }
-
-  function setLevel(level) {
-    HTML.dataset.cogLevel = level;
-  }
-
-  function showToast(text) {
-    let toast = document.getElementById(TOAST_ID);
-
-    if (!toast) {
-      toast = document.createElement("div");
-      toast.id = TOAST_ID;
-
-      toast.style.position = "fixed";
-      toast.style.right = "16px";
-      toast.style.bottom = "16px";
-      toast.style.zIndex = "2147483647";
-      toast.style.maxWidth = "280px";
-      toast.style.padding = "10px 12px";
-      toast.style.borderRadius = "12px";
-      toast.style.fontFamily =
-        "system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
-      toast.style.fontSize = "13px";
-      toast.style.lineHeight = "1.2";
-      toast.style.background = "rgba(20, 20, 20, 0.92)";
-      toast.style.color = "#fff";
-      toast.style.boxShadow = "0 8px 20px rgba(0,0,0,0.25)";
-      toast.style.backdropFilter = "blur(8px)";
-      toast.style.border = "1px solid rgba(255,255,255,0.12)";
-      toast.style.opacity = "0";
-      toast.style.transition = "opacity 120ms ease";
-
-      document.documentElement.appendChild(toast);
-    }
-
-    toast.textContent = text;
-    toast.style.opacity = "1";
-
-    if (toast.__hideTimer) clearTimeout(toast.__hideTimer);
-    toast.__hideTimer = setTimeout(() => {
-      toast.style.opacity = "0";
-    }, 1800);
-  }
-
-  function apply(enabled, level, announce = true) {
-    injectCssOnce();
-    setFocusEnabled(enabled);
-    setLevel(level);
-
-    if (announce) {
-      if (enabled) showToast(`Focus Mode: ON (${level})`);
-      else showToast("Focus Mode: OFF");
-    }
-  }
-
-  async function loadInitialStateFromStorage() {
+  async function loadSettings() {
     try {
-      const res = await chrome.storage.sync.get([
-        "focusEnabled",
-        "intensityLevel",
-        "onboardingResponses"
-      ]);
-
-      const enabled =
-        typeof res.focusEnabled === "boolean" ? res.focusEnabled : false;
-
-      const level = normalizeLevel(res.intensityLevel);
-
-      apply(enabled, level, false);
-
-      // If questionnaire completed, get AI recommendations
-      if (res.onboardingResponses && monitorState.aiClient) {
-        const interactions = {
-          scrollReversals: monitorState.scrollReversals,
-          idlePeriods: monitorState.idlePeriods,
-          overloadScore: monitorState.score
-        };
-        const recommendations = await monitorState.aiClient.getAIRecommendations(
-          res.onboardingResponses,
-          interactions
-        );
-        if (recommendations) {
-          applyAIRecommendations(recommendations);
-        }
-      }
-    } catch {
-      apply(false, DEFAULT_LEVEL, false);
-    }
-  }
-
-  function applyAIRecommendations(recs) {
-    if (!recs) return;
-
-    const source = recs.source || "unknown";
-    const focusLevel = normalizeLevel(recs.focus_level || DEFAULT_LEVEL);
-    const shouldEnable = recs.focus_mode || recs.reduce_distractions;
-
-    if (shouldEnable) {
-      apply(true, focusLevel, true);
-    }
-
-    if (recs.reading_ease) {
-      HTML.classList.add("assist-reading-ease");
-    }
-    if (recs.reduce_distractions) {
-      HTML.classList.add("assist-reduce-distractions");
-    }
-    if (recs.step_by_step) {
-      HTML.classList.add("assist-step-by-step");
-    }
-    if (recs.time_control) {
-      HTML.classList.add("assist-time-control");
-    }
-
-    const sourceLabel = source === "ai" ? "AI" : "Smart defaults";
-    console.log(`[Content] Applied recommendations from ${sourceLabel}`);
-    showToast(`✨ ${sourceLabel} adapted your view`);
-  }
-
-  function recordAction() {
-    monitorState.lastActionT = performance.now();
-  }
-
-  function onScroll() {
-    const y = window.scrollY;
-    const dy = y - monitorState.lastScrollY;
-    const dir = dy === 0 ? 0 : (dy > 0 ? 1 : -1);
-
-    if (dir !== 0 && monitorState.lastDir !== 0 && dir !== monitorState.lastDir) {
-      monitorState.reversalTimes.push(performance.now());
-      monitorState.scrollReversals++;
-    }
-
-    monitorState.lastDir = dir;
-    monitorState.lastScrollY = y;
-    recordAction();
-  }
-
-  async function maybeRefreshAIRecommendations() {
-    const now = performance.now();
-    if (!monitorState.aiClient || now - monitorState.lastAIAdjustT < 8000) return;
-
-    try {
-      const res = await chrome.storage.sync.get(["onboardingResponses"]);
-      if (!res.onboardingResponses) return;
-
-      const interactions = {
-        scrollReversals: monitorState.scrollReversals,
-        idlePeriods: monitorState.idlePeriods,
-        overloadScore: monitorState.score
-      };
-
-      const recommendations = await monitorState.aiClient.getAIRecommendations(
-        res.onboardingResponses,
-        interactions
-      );
-
-      if (recommendations) {
-        applyAIRecommendations(recommendations);
-        monitorState.lastAIAdjustT = now;
+      const stored = await chrome.storage.local.get(CONFIG.STORAGE_KEY);
+      if (stored[CONFIG.STORAGE_KEY]) {
+        state = { ...state, ...stored[CONFIG.STORAGE_KEY] };
       }
     } catch (e) {
-      console.warn("[Content] Failed to refresh recommendations:", e.message);
+      console.warn('Failed to load settings:', e);
     }
   }
 
-  function startInteractionMonitoring() {
-    const WINDOW_MS = 6000;
-    const REVERSAL_CLUSTER = 3;
-    const REVERSAL_POINTS = 18;
-    const IDLE_MS = 5000;
-    const IDLE_POINTS = 12;
-    const DECAY = 4;
-    const TICK_MS = 800;
-
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("click", recordAction, true);
-    window.addEventListener("keydown", recordAction, true);
-    window.addEventListener("input", recordAction, true);
-
-    setInterval(async () => {
-      const t = performance.now();
-
-      monitorState.reversalTimes = monitorState.reversalTimes.filter((rt) => t - rt <= WINDOW_MS);
-
-      if (monitorState.reversalTimes.length >= REVERSAL_CLUSTER) {
-        monitorState.score += REVERSAL_POINTS;
-        monitorState.reversalTimes.splice(0, Math.min(2, monitorState.reversalTimes.length));
-      }
-
-      const idleFor = t - monitorState.lastActionT;
-      if (idleFor >= IDLE_MS) {
-        monitorState.score += IDLE_POINTS;
-        monitorState.idlePeriods++;
-        monitorState.lastActionT = t - 2500;
-      }
-
-      monitorState.score = Math.max(0, monitorState.score - DECAY);
-
-      // Periodically refresh AI recommendations based on new interaction data
-      await maybeRefreshAIRecommendations();
-    }, TICK_MS);
+  async function saveSettings() {
+    try {
+      await chrome.storage.local.set({ [CONFIG.STORAGE_KEY]: state });
+    } catch (e) {
+      console.warn('Failed to save settings:', e);
+    }
   }
 
-  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-    if (!msg) return;
+  function injectStyleSheet() {
+    if (document.getElementById(`${CONFIG.PREFIX}-styles`)) return;
 
-    // Handle action-based messages (for service worker)
-    if (msg.action === "getAIStatus") {
-      const aiStatus = window.__aiClient?.getAIStatus?.() || "unknown";
-      sendResponse({ status: aiStatus });
-      return true;
+    const style = document.createElement('style');
+    style.id = `${CONFIG.PREFIX}-styles`;
+    style.textContent = `
+      .${CONFIG.PREFIX}-orb {
+        position: fixed;
+        bottom: 32px;
+        right: 32px;
+        z-index: ${CONFIG.Z_INDEX};
+        width: 56px;
+        height: 56px;
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+        border: none;
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 16px rgba(37, 99, 235, 0.3);
+        transition: all 0.2s ease;
+        padding: 0;
+        font-size: 0;
+      }
+
+      .${CONFIG.PREFIX}-orb:hover {
+        transform: scale(1.08);
+        box-shadow: 0 6px 24px rgba(37, 99, 235, 0.4);
+      }
+
+      .${CONFIG.PREFIX}-orb:active {
+        transform: scale(0.96);
+      }
+
+      .${CONFIG.PREFIX}-orb svg {
+        width: 28px;
+        height: 28px;
+        fill: white;
+      }
+
+      .${CONFIG.PREFIX}-panel {
+        position: fixed;
+        bottom: 96px;
+        right: 32px;
+        z-index: ${CONFIG.Z_INDEX - 1};
+        width: 320px;
+        background: #ffffff;
+        border-radius: 16px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
+        border: 1px solid #e5e7eb;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        max-height: 75vh;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        animation: slideUp 0.2s ease;
+      }
+
+      @keyframes slideUp {
+        from {
+          opacity: 0;
+          transform: translateY(12px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .${CONFIG.PREFIX}-panel-header {
+        padding: 20px;
+        border-bottom: 1px solid #e5e7eb;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .${CONFIG.PREFIX}-panel-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: #111827;
+      }
+
+      .${CONFIG.PREFIX}-panel-close {
+        background: none;
+        border: none;
+        font-size: 20px;
+        color: #6b7280;
+        cursor: pointer;
+        padding: 4px;
+        transition: all 0.2s;
+      }
+
+      .${CONFIG.PREFIX}-panel-close:hover {
+        background: #f3f4f6;
+        color: #111827;
+      }
+
+      .${CONFIG.PREFIX}-panel-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      .${CONFIG.PREFIX}-section {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .${CONFIG.PREFIX}-label {
+        font-size: 12px;
+        font-weight: 700;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .${CONFIG.PREFIX}-select {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 6px;
+      }
+
+      .${CONFIG.PREFIX}-select-btn {
+        padding: 10px;
+        background: #f3f4f6;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 600;
+        color: #6b7280;
+        transition: all 0.15s;
+      }
+
+      .${CONFIG.PREFIX}-select-btn:hover {
+        background: #e5e7eb;
+      }
+
+      .${CONFIG.PREFIX}-select-btn.active {
+        background: #2563eb;
+        color: white;
+        border-color: #2563eb;
+      }
+
+      .${CONFIG.PREFIX}-toast {
+        position: fixed;
+        bottom: 100px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.9);
+        color: white;
+        padding: 12px 16px;
+        border-radius: 8px;
+        font-size: 13px;
+        z-index: ${CONFIG.Z_INDEX - 2};
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  let cursorOverlay = null;
+  let rafId = null;
+  let lastMousePos = { x: 0, y: 0 };
+
+  function applyCursorStyles() {
+    const htmlEl = document.documentElement;
+
+    if (state.cursorSize === 'normal') {
+      if (cursorOverlay) cursorOverlay.style.display = 'none';
+      if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+      htmlEl.style.cursor = 'auto';
+    } else {
+      htmlEl.style.cursor = 'none';
+      showCursorOverlay(state.cursorSize, state.cursorColour);
+    }
+  }
+
+  function showCursorOverlay(size, colour) {
+    if (!cursorOverlay) {
+      cursorOverlay = document.createElement('div');
+      cursorOverlay.id = `${CONFIG.PREFIX}-cursor-magnifier`;
+      cursorOverlay.style.cssText = `
+        position: fixed;
+        pointer-events: none;
+        z-index: ${CONFIG.Z_INDEX - 2};
+        display: none;
+      `;
+      document.body.appendChild(cursorOverlay);
+
+      document.addEventListener('mousemove', (e) => {
+        lastMousePos.x = e.clientX;
+        lastMousePos.y = e.clientY;
+      });
     }
 
-    // Handle legacy type-based messages (for popup)
-    if (typeof msg.type !== "string") return;
+    cursorOverlay.style.display = 'block';
 
-    if (msg.type === "TOGGLE_FOCUS") {
-      const enabled = !!msg.enabled;
-      const currentLevel = normalizeLevel(HTML.dataset.cogLevel);
+    const sizes = { 'enhanced': 48, 'large': 72 };
+    const pixelSize = sizes[size] || 48;
+    const arrowColour = CONFIG.CURSOR_COLOURS[colour] || '#2563eb';
+    const strokeWidth = (2 * pixelSize) / 48;
 
-      apply(enabled, currentLevel, true);
+    const arrowSVG = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 32" width="${pixelSize}" height="${pixelSize}" preserveAspectRatio="xMinYMin meet">
+        <path d="M 0 0 L 0 22 L 4 19 L 8 28 L 12 25 L 8 16 L 13 6 Z" 
+              fill="${arrowColour}" 
+              stroke="#111111" 
+              stroke-width="${strokeWidth}"
+              stroke-linejoin="round"
+              stroke-linecap="round"/>
+      </svg>
+    `;
 
-      if (sendResponse) sendResponse({ ok: true });
-      return true;
+    cursorOverlay.innerHTML = arrowSVG;
+
+    if (!rafId) {
+      function updateCursorPosition() {
+        if (cursorOverlay && cursorOverlay.style.display === 'block') {
+          cursorOverlay.style.left = lastMousePos.x + 'px';
+          cursorOverlay.style.top = lastMousePos.y + 'px';
+        }
+        rafId = requestAnimationFrame(updateCursorPosition);
+      }
+      rafId = requestAnimationFrame(updateCursorPosition);
     }
+  }
 
-    if (msg.type === "SET_INTENSITY") {
-      const level = normalizeLevel(msg.level);
-      const enabled = HTML.dataset.cogFocus === "on";
+  function setCursorSize(size) {
+    state.cursorSize = size;
+    applyCursorStyles();
+    saveSettings();
+    updatePanelUI();
+  }
 
-      apply(enabled, level, true);
+  function setCursorColour(colour) {
+    state.cursorColour = colour;
+    applyCursorStyles();
+    saveSettings();
+    updatePanelUI();
+  }
 
-      if (sendResponse) sendResponse({ ok: true });
-      return true;
+  function createPanel() {
+    const panel = document.createElement('div');
+    panel.id = `${CONFIG.PREFIX}-panel`;
+    panel.className = `${CONFIG.PREFIX}-panel`;
+
+    panel.innerHTML = `
+      <div class="${CONFIG.PREFIX}-panel-header">
+        <div class="${CONFIG.PREFIX}-panel-title">Cursor</div>
+        <button class="${CONFIG.PREFIX}-panel-close">×</button>
+      </div>
+
+      <div class="${CONFIG.PREFIX}-panel-body">
+        <div class="${CONFIG.PREFIX}-section">
+          <div class="${CONFIG.PREFIX}-label">Size</div>
+          <div class="${CONFIG.PREFIX}-select">
+            <button class="${CONFIG.PREFIX}-select-btn ${state.cursorSize === 'normal' ? 'active' : ''}" data-cursor-size="normal">Normal</button>
+            <button class="${CONFIG.PREFIX}-select-btn ${state.cursorSize === 'enhanced' ? 'active' : ''}" data-cursor-size="enhanced">Enhanced</button>
+            <button class="${CONFIG.PREFIX}-select-btn ${state.cursorSize === 'large' ? 'active' : ''}" data-cursor-size="large">Large</button>
+          </div>
+        </div>
+
+        <div class="${CONFIG.PREFIX}-section">
+          <div class="${CONFIG.PREFIX}-label">Colour</div>
+          <div class="${CONFIG.PREFIX}-select">
+            <button class="${CONFIG.PREFIX}-select-btn ${state.cursorColour === 'blue' ? 'active' : ''}" data-cursor-colour="blue">Blue</button>
+            <button class="${CONFIG.PREFIX}-select-btn ${state.cursorColour === 'teal' ? 'active' : ''}" data-cursor-colour="teal">Teal</button>
+            <button class="${CONFIG.PREFIX}-select-btn ${state.cursorColour === 'purple' ? 'active' : ''}" data-cursor-colour="purple">Purple</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(panel);
+    attachPanelListeners(panel);
+  }
+
+  function attachPanelListeners(panel) {
+    panel.querySelector(`.${CONFIG.PREFIX}-panel-close`).addEventListener('click', hidePanel);
+
+    panel.querySelectorAll(`[data-cursor-size]`).forEach(btn => {
+      btn.addEventListener('click', () => setCursorSize(btn.dataset.cursorSize));
+    });
+
+    panel.querySelectorAll(`[data-cursor-colour]`).forEach(btn => {
+      btn.addEventListener('click', () => setCursorColour(btn.dataset.cursorColour));
+    });
+  }
+
+  function updatePanelUI() {
+    const panel = document.getElementById(`${CONFIG.PREFIX}-panel`);
+    if (!panel) return;
+
+    panel.querySelectorAll(`[data-cursor-size]`).forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.cursorSize === state.cursorSize);
+    });
+
+    panel.querySelectorAll(`[data-cursor-colour]`).forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.cursorColour === state.cursorColour);
+    });
+  }
+
+  function hidePanel() {
+    const panel = document.getElementById(`${CONFIG.PREFIX}-panel`);
+    if (panel) panel.remove();
+  }
+
+  function showPanel() {
+    if (document.getElementById(`${CONFIG.PREFIX}-panel`)) return;
+    createPanel();
+  }
+
+  function togglePanel() {
+    if (document.getElementById(`${CONFIG.PREFIX}-panel`)) {
+      hidePanel();
+    } else {
+      showPanel();
     }
-  });
+  }
 
-  loadInitialStateFromStorage();
-  startInteractionMonitoring();
+  function getOrbSVG() {
+    return `
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M13 2a1 1 0 11-2 0 1 1 0 012 0Z"/>
+        <path d="M18.378 5.622a1 1 0 11-1.414-1.414 1 1 0 011.414 1.414Z"/>
+        <path d="M21 11a1 1 0 11 0-2 1 1 0 010 2Z"/>
+        <path d="M18.378 18.378a1 1 0 11-1.414-1.414 1 1 0 011.414 1.414Z"/>
+        <path d="M13 21a1 1 0 11-2 0 1 1 0 012 0Z"/>
+        <path d="M5.622 18.378a1 1 0 11-1.414-1.414 1 1 0 011.414 1.414Z"/>
+        <path d="M3 13a1 1 0 11 0-2 1 1 0 010 2Z"/>
+        <path d="M5.622 5.622a1 1 0 11-1.414-1.414 1 1 0 011.414 1.414Z"/>
+        <circle cx="12" cy="12" r="3" fill="currentColor"/>
+      </svg>
+    `;
+  }
+
+  function createOrb() {
+    const orb = document.createElement('button');
+    orb.id = `${CONFIG.PREFIX}-orb`;
+    orb.className = `${CONFIG.PREFIX}-orb`;
+    orb.innerHTML = getOrbSVG();
+    orb.setAttribute('aria-label', 'Cursor Controls');
+
+    orb.addEventListener('click', togglePanel);
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') hidePanel();
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest(`#${CONFIG.PREFIX}-orb`) && !e.target.closest(`#${CONFIG.PREFIX}-panel`)) {
+        hidePanel();
+      }
+    });
+
+    document.body.appendChild(orb);
+  }
+
+  async function init() {
+    await loadSettings();
+    injectStyleSheet();
+    createOrb();
+    applyCursorStyles();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
 })();
