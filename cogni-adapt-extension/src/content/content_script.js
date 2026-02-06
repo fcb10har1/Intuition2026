@@ -255,32 +255,56 @@
 
     cursorOverlay.style.display = 'block';
 
-    const sizes = { 'enhanced': 48, 'large': 72 };
-    const pixelSize = sizes[size] || 48;
-    const arrowColour = CONFIG.CURSOR_COLOURS[colour] || '#2563eb';
-    const strokeWidth = Math.max(1.5, (3 * pixelSize) / 48);
+    const sizes = { 'enhanced': 28, 'large': 40 };
+    const pixelSize = sizes[size] || 28;
+    const cursorColour = CONFIG.CURSOR_COLOURS[colour] || '#2563eb';
+    const strokeWidth = size === 'large' ? 1.4 : 1;
 
-    // Symmetric teardrop cursor: tip at -12px, width 20px, height 28px
-    const teardropSVG = `
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 28" width="${pixelSize}" height="${Math.round(pixelSize * 1.167)}" preserveAspectRatio="xMidYMid meet" style="position:absolute; left:0; top:0;">
-        <path d="M 10 0 C 14.4 4.8 18 10.5 18 15.5 C 18 21 14.9 25.5 10 25.5 C 5.1 25.5 2 21 2 15.5 C 2 10.5 5.6 4.8 10 0 Z" 
-              fill="${arrowColour}" 
-              stroke="#111111" 
+    // Clean pointing hand cursor - like a standard pointer
+    const pointingHandSVG = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 24" width="${pixelSize}" height="${pixelSize}" preserveAspectRatio="xMidYMid meet" style="position:absolute; left:0; top:0;">
+        <!-- Index finger pointing up -->
+        <path d="M 10 1 L 12 8 L 14 6 L 15 14 Q 15 16 13 17 L 12 17 Q 10 16 10 14 L 10 1" 
+              fill="${cursorColour}" 
+              stroke="#1a1a1a" 
               stroke-width="${strokeWidth}"
               stroke-linejoin="round"
-              stroke-linecap="round"
-              opacity="0.95"/>
+              stroke-linecap="round"/>
+        
+        <!-- Other fingers folded -->
+        <path d="M 8 9 Q 6 10 5 12 Q 4 14 6 15 Q 8 14 8 12" 
+              fill="${cursorColour}" 
+              stroke="#1a1a1a" 
+              stroke-width="${strokeWidth}"
+              stroke-linejoin="round"
+              stroke-linecap="round"/>
+        
+        <!-- Thumb -->
+        <path d="M 8 10 Q 5 11 4 13 Q 3 14 5 15 Q 7 14 8 12" 
+              fill="${cursorColour}" 
+              stroke="#1a1a1a" 
+              stroke-width="${strokeWidth}"
+              stroke-linejoin="round"
+              stroke-linecap="round"/>
+        
+        <!-- Palm -->
+        <path d="M 8 14 L 10 14 Q 12 15 14 13 L 15 14 Q 13 17 10 18 Q 7 17 6 15 Z" 
+              fill="${cursorColour}" 
+              stroke="#1a1a1a" 
+              stroke-width="${strokeWidth}"
+              stroke-linejoin="round"
+              stroke-linecap="round"/>
       </svg>
     `;
 
-    cursorOverlay.innerHTML = teardropSVG;
+    cursorOverlay.innerHTML = pointingHandSVG;
 
     if (!rafId) {
       function updateCursorPosition() {
         if (cursorOverlay && cursorOverlay.style.display === 'block') {
-          // Offset so tip of teardrop (top point) aligns with actual cursor
-          cursorOverlay.style.left = (lastMousePos.x - pixelSize * 0.5) + 'px';
-          cursorOverlay.style.top = (lastMousePos.y - pixelSize * 0.1) + 'px';
+          // Position at index finger tip
+          cursorOverlay.style.left = (lastMousePos.x - pixelSize * 0.4) + 'px';
+          cursorOverlay.style.top = (lastMousePos.y - pixelSize * 0.05) + 'px';
         }
         rafId = requestAnimationFrame(updateCursorPosition);
       }
