@@ -28,6 +28,11 @@
   let state = {
     cursorSize: CONFIG.CURSOR_DEFAULTS.size,
     cursorColour: CONFIG.CURSOR_DEFAULTS.colour,
+    orbX: null,
+    orbY: null,
+    isDraggingOrb: false,
+    dragOffsetX: 0,
+    dragOffsetY: 0
   };
 
   async function loadSettings() {
@@ -57,31 +62,29 @@
     style.textContent = `
       .${CONFIG.PREFIX}-orb {
         position: fixed;
-        bottom: 32px;
-        right: 32px;
         z-index: ${CONFIG.Z_INDEX};
         width: 56px;
         height: 56px;
         background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
         border: none;
         border-radius: 50%;
-        cursor: pointer;
+        cursor: grab;
         display: flex;
         align-items: center;
         justify-content: center;
         box-shadow: 0 4px 16px rgba(37, 99, 235, 0.3);
-        transition: all 0.2s ease;
+        transition: box-shadow 0.2s ease;
         padding: 0;
         font-size: 0;
-      }
-
-      .${CONFIG.PREFIX}-orb:hover {
-        transform: scale(1.08);
-        box-shadow: 0 6px 24px rgba(37, 99, 235, 0.4);
+        user-select: none;
       }
 
       .${CONFIG.PREFIX}-orb:active {
-        transform: scale(0.96);
+        cursor: grabbing;
+      }
+
+      .${CONFIG.PREFIX}-orb:hover {
+        box-shadow: 0 6px 24px rgba(37, 99, 235, 0.4);
       }
 
       .${CONFIG.PREFIX}-orb svg {
@@ -257,9 +260,9 @@
     const arrowColour = CONFIG.CURSOR_COLOURS[colour] || '#2563eb';
     const strokeWidth = (2 * pixelSize) / 48;
 
-    const arrowSVG = `
+    const teardropSVG = `
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 32" width="${pixelSize}" height="${pixelSize}" preserveAspectRatio="xMinYMin meet">
-        <path d="M 0 0 L 0 22 L 4 19 L 8 28 L 12 25 L 8 16 L 13 6 Z" 
+        <path d="M 12 2 C 16 6 20 12 20 17 C 20 23 16.4 28 12 28 C 7.6 28 4 23 4 17 C 4 12 8 6 12 2 Z" 
               fill="${arrowColour}" 
               stroke="#111111" 
               stroke-width="${strokeWidth}"
@@ -268,7 +271,7 @@
       </svg>
     `;
 
-    cursorOverlay.innerHTML = arrowSVG;
+    cursorOverlay.innerHTML = teardropSVG;
 
     if (!rafId) {
       function updateCursorPosition() {
@@ -376,17 +379,17 @@
   }
 
   function getOrbSVG() {
+    const dots = [];
+    for (let i = 0; i < 8; i++) {
+      const angle = (i * Math.PI * 2) / 8;
+      const x = 12 + 7 * Math.cos(angle);
+      const y = 12 + 7 * Math.sin(angle);
+      dots.push(`<circle cx="${x}" cy="${y}" r="1.2" fill="white"/>`);
+    }
     return `
       <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        <path d="M13 2a1 1 0 11-2 0 1 1 0 012 0Z"/>
-        <path d="M18.378 5.622a1 1 0 11-1.414-1.414 1 1 0 011.414 1.414Z"/>
-        <path d="M21 11a1 1 0 11 0-2 1 1 0 010 2Z"/>
-        <path d="M18.378 18.378a1 1 0 11-1.414-1.414 1 1 0 011.414 1.414Z"/>
-        <path d="M13 21a1 1 0 11-2 0 1 1 0 012 0Z"/>
-        <path d="M5.622 18.378a1 1 0 11-1.414-1.414 1 1 0 011.414 1.414Z"/>
-        <path d="M3 13a1 1 0 11 0-2 1 1 0 010 2Z"/>
-        <path d="M5.622 5.622a1 1 0 11-1.414-1.414 1 1 0 011.414 1.414Z"/>
-        <circle cx="12" cy="12" r="3" fill="currentColor"/>
+        ${dots.join('')}
+        <circle cx="12" cy="12" r="2.5" fill="white"/>
       </svg>
     `;
   }
@@ -398,7 +401,61 @@
     orb.innerHTML = getOrbSVG();
     orb.setAttribute('aria-label', 'Cursor Controls');
 
-    orb.addEventListener('click', togglePanel);
+    // Set initial position
+    if (state.orbX !== null && state.orbY !== null) {
+      orb.style.left = state.orbX + 'px';
+      orb.style.top = state.orbY + 'px';
+    } else {
+      orb.style.right = '32px';
+      orb.style.top = '50%';
+      orb.style.transform = 'translateY(-50%)';
+    }
+
+    let isClickDrag = false;
+    let clickTimeout;
+
+    orb.addEventListener('mousedown', (e) => {
+      state.isDraggingOrb = true;
+      isClickDrag = false;
+      clickTimeout = setTimeout(() => {
+        isClickDrag = true;
+      }, 100);
+
+      const rect = orb.getBoundingClientRect();
+      state.dragOffsetX = e.clientX - rect.left;
+      state.dragOffsetY = e.clientY - rect.top;
+      orb.style.transition = 'none';
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!state.isDraggingOrb) return;
+
+      const newX = e.clientX - state.dragOffsetX;
+      const newY = e.clientY - state.dragOffsetY;
+
+      orb.style.left = newX + 'px';
+      orb.style.top = newY + 'px';
+      orb.style.right = 'auto';
+      orb.style.transform = 'none';
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (state.isDraggingOrb) {
+        clearTimeout(clickTimeout);
+        state.isDraggingOrb = false;
+
+        const rect = orb.getBoundingClientRect();
+        state.orbX = rect.left;
+        state.orbY = rect.top;
+        saveSettings();
+
+        orb.style.transition = 'box-shadow 0.2s ease';
+
+        if (!isClickDrag) {
+          togglePanel();
+        }
+      }
+    });
 
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') hidePanel();
