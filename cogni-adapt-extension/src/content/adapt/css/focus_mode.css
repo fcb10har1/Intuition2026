@@ -1,159 +1,31 @@
-/* Focus Mode CSS
+/* Focus Mode
    Activated when:
-   <html data-cog-focus="on" data-cog-level="mild|med|strong">
+   html[data-cogEnabled="1"][data-cog_focus_mode="1"]
 */
 
-html[data-cog-focus="on"] {
-  scroll-behavior: auto !important;
+html[data-cogEnabled="1"][data-cog_focus_mode="1"] body {
+  line-height: calc(1.45 + (var(--cog-intensity, 60) / 200));
 }
 
-/* ===== Reduce clutter / visual noise ===== */
-html[data-cog-focus="on"] nav,
-html[data-cog-focus="on"] aside,
-html[data-cog-focus="on"] header [role="navigation"],
-html[data-cog-focus="on"] [role="navigation"],
-html[data-cog-focus="on"] [aria-label*="nav" i],
-html[data-cog-focus="on"] [aria-label*="menu" i],
-html[data-cog-focus="on"] [class*="sidebar" i],
-html[data-cog-focus="on"] [id*="sidebar" i],
-html[data-cog-focus="on"] [class*="ad-" i],
-html[data-cog-focus="on"] [id*="ad-" i],
-html[data-cog-focus="on"] [class*="ads" i],
-html[data-cog-focus="on"] [id*="ads" i],
-html[data-cog-focus="on"] [class*="banner" i],
-html[data-cog-focus="on"] [id*="banner" i] {
-  display: none !important;
+html[data-cogEnabled="1"][data-cog_focus_mode="1"] body > * {
+  transition: filter 120ms ease, opacity 120ms ease;
 }
 
-/* Medium/Strong: hide more recommendation/promotional panels */
-html[data-cog-focus="on"][data-cog-level="med"] [class*="recommend" i],
-html[data-cog-focus="on"][data-cog-level="med"] [id*="recommend" i],
-html[data-cog-focus="on"][data-cog-level="med"] [class*="related" i],
-html[data-cog-focus="on"][data-cog-level="med"] [id*="related" i],
-html[data-cog-focus="on"][data-cog-level="med"] [class*="promo" i],
-html[data-cog-focus="on"][data-cog-level="med"] [id*="promo" i],
-html[data-cog-focus="on"][data-cog-level="med"] [class*="newsletter" i],
-html[data-cog-focus="on"][data-cog-level="med"] [id*="newsletter" i] {
-  display: none !important;
-}
-
-/* Strong: also hide footer (aggressive mode) */
-html[data-cog-focus="on"][data-cog-level="strong"] footer {
-  display: none !important;
-}
-
-/* ===== Center + readable width ===== */
-html[data-cog-focus="on"] main,
-html[data-cog-focus="on"] article,
-html[data-cog-focus="on"] [role="main"] {
-  max-width: 900px !important;
+/* Try to center main content a bit */
+html[data-cogEnabled="1"][data-cog_focus_mode="1"] body {
+  max-width: 980px;
   margin-left: auto !important;
   margin-right: auto !important;
+  padding-left: 16px !important;
+  padding-right: 16px !important;
 }
 
-/* Strong: narrower for focus */
-html[data-cog-focus="on"][data-cog-level="strong"] main,
-html[data-cog-focus="on"][data-cog-level="strong"] article,
-html[data-cog-focus="on"][data-cog-level="strong"] [role="main"] {
-  max-width: 760px !important;
+/* Reduce visual noise from sidebars/ads-ish areas */
+html[data-cogEnabled="1"][data-cog_focus_mode="1"] aside,
+html[data-cogEnabled="1"][data-cog_focus_mode="1"] nav,
+html[data-cogEnabled="1"][data-cog_focus_mode="1"] [role="navigation"],
+html[data-cogEnabled="1"][data-cog_focus_mode="1"] [aria-label*="sidebar" i] {
+  opacity: 0.35;
+  filter: blur(calc(var(--cog-intensity, 60) / 40 * 1px));
+  pointer-events: none;
 }
-
-/* ===== Reading ease ===== */
-html[data-cog-focus="on"] body {
-  line-height: 1.6 !important;
-}
-
-html[data-cog-focus="on"][data-cog-level="mild"] body { line-height: 1.55 !important; }
-html[data-cog-focus="on"][data-cog-level="med"] body { line-height: 1.7 !important; }
-html[data-cog-focus="on"][data-cog-level="strong"] body { line-height: 1.85 !important; }
-
-html[data-cog-focus="on"] p {
-  margin-top: 0.8em !important;
-  margin-bottom: 0.8em !important;
-}
-
-/* ===== Reduce motion ===== */
-html[data-cog-focus="on"] * {
-  animation: none !important;
-  transition: none !important;
-}
-
-/* ===== Clear focus outline ===== */
-html[data-cog-focus="on"] :focus {
-  outline: 3px solid rgba(255, 165, 0, 0.9) !important;
-  outline-offset: 2px !important;
-}
-
-/* ===== AI-Recommended Assists ===== */
-
-/* Reading Ease: Improved spacing & typography */
-html.assist-reading-ease {
-  font-size: 16px !important;
-}
-
-html.assist-reading-ease body {
-  line-height: 1.8 !important;
-  letter-spacing: 0.3px !important;
-}
-
-html.assist-reading-ease p, 
-html.assist-reading-ease li {
-  margin-bottom: 1.2em !important;
-  max-width: 65ch !important;
-}
-
-html.assist-reading-ease h1,
-html.assist-reading-ease h2,
-html.assist-reading-ease h3 {
-  margin-top: 1.5em !important;
-  margin-bottom: 0.8em !important;
-}
-
-/* Reduce Distractions: Hide common distraction elements */
-html.assist-reduce-distractions [class*="ad" i],
-html.assist-reduce-distractions [id*="ad" i],
-html.assist-reduce-distractions [class*="banner" i],
-html.assist-reduce-distractions [id*="banner" i],
-html.assist-reduce-distractions [class*="popup" i],
-html.assist-reduce-distractions [id*="popup" i],
-html.assist-reduce-distractions [class*="modal" i],
-html.assist-reduce-distractions .twitter-widget {
-  display: none !important;
-}
-
-html.assist-reduce-distractions {
-  --webkit-animation: none !important;
-  animation: none !important;
-}
-
-/* Step-by-Step: Highlight primary actions, dim secondary */
-html.assist-step-by-step button:not(:first-of-type) {
-  opacity: 0.5 !important;
-}
-
-html.assist-step-by-step button:first-of-type {
-  border-width: 2px !important;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2) !important;
-}
-
-html.assist-step-by-step form {
-  border: 2px solid #e5e7eb !important;
-  padding: 20px !important;
-  border-radius: 12px !important;
-  background: #f9fafb !important;
-}
-
-/* Time Control: Show elapsed time (simple counter) */
-html.assist-time-control::before {
-  content: "⏱ Session time shown above";
-  position: fixed;
-  top: 10px;
-  right: 10px;
-  z-index: 999999;
-  background: #1f2937;
-  color: #fff;
-  padding: 6px 10px;
-  border-radius: 6px;
-  font-size: 12px;
-}
-

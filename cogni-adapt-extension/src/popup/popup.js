@@ -1,162 +1,194 @@
-// ---- Config: names used in chrome.storage ----
-const STORAGE_DEFAULTS = {
-  focusEnabled: false,
-  intensity: "med" // mild | med | strong
-};
+const ASSIST_KEYS = [
+  "focus_mode",
+  "reduce_distractions",
+  "reading_ease",
+  "step_by_step",
+  "time_control",
+  "focus_guide",
+  "error_support",
+  "dark_mode"
+];
 
-// ---- Helper: get active tab ----
+function $(id) {
+  return document.getElementById(id);
+}
+
+function setStatus(msg, isOk = false) {
+  const el = $("status");
+  if (!msg) {
+    el.style.display = "none";
+    el.textContent = "";
+    el.className = "danger";
+    return;
+  }
+  el.style.display = "block";
+  el.textContent = msg;
+  el.className = isOk ? "ok" : "danger";
+}
+
 async function getActiveTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   return tab;
 }
 
-// ---- Storage helpers ----
-async function loadSettings() {
-  const data = await chrome.storage.sync.get(STORAGE_DEFAULTS);
-  return {
-    focusEnabled: !!data.focusEnabled,
-    intensity: data.intensity || "med"
-  };
-}
-
-async function saveSettings(patch) {
-  const current = await loadSettings();
-  await chrome.storage.sync.set({ ...current, ...patch });
-}
-
-// ---- UI helpers ----
-function setUI({ focusEnabled, intensity }) {
-  const toggleBtn = document.getElementById("toggleBtn");
-  const status = document.getElementById("status");
-  const intensitySelect = document.getElementById("intensitySelect");
-
-  toggleBtn.textContent = focusEnabled ? "ON" : "OFF";
-  status.textContent = focusEnabled ? "ON" : "OFF";
-  intensitySelect.value = intensity;
-}
-
-// ---- Ensure content script + css are injected ----
-// This keeps the content script always present for messaging.
-async function ensureInjected(tabId) {
-  // Inject JS (safe if run multiple times; content script guards with a global flag)
-  await chrome.scripting.executeScript({
-    target: { tabId },
-    files: ["src/content/content_script.js"]
+function sendToTab(tabId, message) {
+  return new Promise((resolve, reject) => {
+    chrome.tabs.sendMessage(tabId, message, (resp) => {
+      const err = chrome.runtime.lastError;
+      if (err) return reject(err);
+      resolve(resp);
+    });
   });
 }
 
-// ---- Send messages to content script ----
-async function sendToContent(tabId, message) {
+function sendToBG(message) {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(message, (resp) => {
+      const err = chrome.runtime.lastError;
+      if (err) return reject(err);
+      resolve(resp);
+    });
+  });
+}
+
+async function ensureContentScript(tabId) {
+  // Ask service worker to inject content script (useful right after extension reload)
   try {
-    await chrome.tabs.sendMessage(tabId, message);
-  } catch (e) {
-    // If content script isn't ready, try injecting once then resend
-    await ensureInjected(tabId);
-    await chrome.tabs.sendMessage(tabId, message);
+    await sendToBG({ type: "INJECT_CONTENT_SCRIPT", tabId });
+  } catch (_) {
+    // ignore; we’ll still try ping
   }
 }
 
-document.addEventListener("DOMContentLoaded", async () => {
-  // Load initial state
-  const settings = await loadSettings();
-  setUI(settings);
+async function ping(tabId) {
+  try {
+    const resp = await sendToTab(tabId, { type: "PING" });
+    return resp && resp.ok;
+  } catch (_) {
+    return false;
+  }
+}
 
-  const toggleBtn = document.getElementById("toggleBtn");
-  const intensitySelect = document.getElementById("intensitySelect");
-  const aiStatusEl = document.getElementById("aiStatus");
+async function loadStateToUI(tabId) {
+  setStatus("");
 
-  // Update AI status
-  async function updateAIStatus() {
+  // 1) Try ping; if missing, inject; ping again
+  let alive = await ping(tabId);
+  if (!alive) {
+    await ensureContentScript(tabId);
+    alive = await ping(tabId);
+  }
+
+  if (!alive) {
+    setStatus("Content script not responding. Refresh the page and reopen popup.");
+    return null;
+  }
+
+  // 2) Get current state from content script
+  const state = await sendToTab(tabId, { type: "GET_STATE" });
+  $("enabled").checked = !!state.enabled;
+  $("intensity").value = String(state.intensity ?? 60);
+
+  // update buttons
+  document.querySelectorAll("button.assist").forEach((btn) => {
+    const key = btn.getAttribute("data-key");
+    const on = !!(state.assists && state.assists[key]);
+    btn.dataset.active = on ? "1" : "0";
+  });
+
+  setStatus("Connected", true);
+  return state;
+}
+
+async function applyEnabled(tabId, enabled) {
+  await sendToTab(tabId, { type: "SET_ENABLED", enabled: !!enabled });
+}
+
+async function applyIntensity(tabId, intensity) {
+  const v = Math.max(0, Math.min(100, Number(intensity)));
+  await sendToTab(tabId, { type: "SET_INTENSITY", intensity: v });
+}
+
+async function toggleAssist(tabId, key) {
+  await sendToTab(tabId, { type: "TOGGLE_ASSIST", key });
+}
+
+async function recommend(tabId) {
+  // Ask content script to collect signals + ask BG AI client for recommendations
+  const resp = await sendToTab(tabId, { type: "REQUEST_RECOMMENDATIONS" });
+
+  if (!resp || !resp.ok) {
+    setStatus(resp?.error || "Recommendation failed.");
+    return;
+  }
+
+  const recs = resp.recommendations || [];
+  if (recs.length === 0) {
+    setStatus("No recommendations right now.", true);
+    return;
+  }
+
+  // Turn on recommended assists
+  for (const key of recs) {
+    if (ASSIST_KEYS.includes(key)) {
+      await sendToTab(tabId, { type: "SET_ASSIST", key, value: true });
+    }
+  }
+
+  setStatus(`Recommended: ${recs.map((x) => x.replace(/_/g, " ")).join(", ")}`, true);
+  await loadStateToUI(tabId);
+}
+
+async function main() {
+  const tab = await getActiveTab();
+  if (!tab || !tab.id) {
+    setStatus("No active tab.");
+    return;
+  }
+  const tabId = tab.id;
+
+  await loadStateToUI(tabId);
+
+  $("enabled").addEventListener("change", async (e) => {
     try {
-      const response = await chrome.runtime.sendMessage({ action: "checkAIHealth" });
-      const status = response?.status || "unknown";
-      
-      let text = "Offline";
-      let bg = "#fee2e2";
-      let color = "#991b1b";
-      
-      if (status === "connected") {
-        text = "✓ Connected";
-        bg = "#dcfce7";
-        color = "#166534";
-      } else if (status === "unavailable") {
-        text = "Using defaults";
-        bg = "#fef3c7";
-        color = "#92400e";
-      }
-      
-      if (aiStatusEl) {
-        aiStatusEl.textContent = text;
-        aiStatusEl.style.background = bg;
-        aiStatusEl.style.color = color;
-      }
-    } catch (e) {
-      console.warn("[Popup] AI health check error:", e.message);
-      if (aiStatusEl) {
-        aiStatusEl.textContent = "Using defaults";
-        aiStatusEl.style.background = "#fef3c7";
-        aiStatusEl.style.color = "#92400e";
-      }
-    }
-  }
-
-  // Initial check
-  await updateAIStatus();
-
-  // Recheck every 5 seconds
-  setInterval(updateAIStatus, 5000);
-
-  // Toggle Focus Mode
-  toggleBtn.addEventListener("click", async () => {
-    const tab = await getActiveTab();
-    if (!tab?.id) return;
-
-    const current = await loadSettings();
-    const nextEnabled = !current.focusEnabled;
-
-    await saveSettings({ focusEnabled: nextEnabled });
-    setUI({ ...current, focusEnabled: nextEnabled });
-
-    await ensureInjected(tab.id);
-
-    // Contract message #1:
-    await sendToContent(tab.id, { type: "TOGGLE_FOCUS", enabled: nextEnabled });
-
-    // Also send current intensity so content can apply correct level
-    await sendToContent(tab.id, { type: "SET_INTENSITY", level: (await loadSettings()).intensity });
-  });
-
-  // Set Intensity
-  intensitySelect.addEventListener("change", async (e) => {
-    const tab = await getActiveTab();
-    if (!tab?.id) return;
-
-    const level = e.target.value; // mild | med | strong
-    await saveSettings({ intensity: level });
-
-    const current = await loadSettings();
-    setUI(current);
-
-    await ensureInjected(tab.id);
-
-    // Contract message #2:
-    await sendToContent(tab.id, { type: "SET_INTENSITY", level });
-
-    // If focus is ON, we can resend focus to ensure consistency
-    if (current.focusEnabled) {
-      await sendToContent(tab.id, { type: "TOGGLE_FOCUS", enabled: true });
+      await applyEnabled(tabId, e.target.checked);
+      await loadStateToUI(tabId);
+    } catch {
+      setStatus("Content script not responding. Refresh the page and reopen popup.");
     }
   });
 
-  // OPTIONAL: auto-apply saved state when opening popup (nice UX)
-  // This makes it feel "persistent".
-  // Only do this if you want it: it will message the content script each time popup opens.
-  try {
-    const tab = await getActiveTab();
-    if (tab?.id) {
-      await ensureInjected(tab.id);
-      await sendToContent(tab.id, { type: "SET_INTENSITY", level: settings.intensity });
-      await sendToContent(tab.id, { type: "TOGGLE_FOCUS", enabled: settings.focusEnabled });
+  $("intensity").addEventListener("input", async (e) => {
+    try {
+      await applyIntensity(tabId, e.target.value);
+    } catch {
+      setStatus("Content script not responding. Refresh the page and reopen popup.");
     }
-  } catch (_) {}
-});
+  });
+
+  document.querySelectorAll("button.assist").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const key = btn.getAttribute("data-key");
+      try {
+        await toggleAssist(tabId, key);
+        await loadStateToUI(tabId);
+      } catch {
+        setStatus("Content script not responding. Refresh the page and reopen popup.");
+      }
+    });
+  });
+
+  $("recommend").addEventListener("click", async () => {
+    try {
+      await recommend(tabId);
+    } catch {
+      setStatus("Recommendation failed. Try refreshing the page.");
+    }
+  });
+
+  $("refresh").addEventListener("click", async () => {
+    await loadStateToUI(tabId);
+  });
+}
+
+main().catch(() => setStatus("Popup error."));
