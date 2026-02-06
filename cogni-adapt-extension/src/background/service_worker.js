@@ -1,66 +1,81 @@
-const ONBOARDING_URL = chrome.runtime.getURL("src/onboarding/onboarding.html");
+// MV3 Service Worker (self-contained)
 
-chrome.runtime.onInstalled.addListener(async (details) => {
-  if (details.reason !== "install") return;
+// ===== tiny local "AI client" (rules-based) =====
+function clamp01(x) {
+  const n = Number(x);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(1, n));
+}
 
-  const { onboardingCompleted } = await chrome.storage.sync.get(["onboardingCompleted"]);
-  if (!onboardingCompleted) {
-    await chrome.tabs.create({ url: ONBOARDING_URL });
+function recommendAssists(signals) {
+  const density = clamp01(signals?.densityScore);
+  const wordCount = Number(signals?.wordCount || 0);
+  const linkCount = Number(signals?.linkCount || 0);
+  const hasForms = !!signals?.hasForms;
+
+  const recs = [];
+
+  if (density > 0.55 || linkCount > 80) {
+    recs.push("reduce_distractions", "focus_mode");
+  }
+  if (wordCount > 1200) {
+    recs.push("reading_ease");
+  }
+  if (hasForms) {
+    recs.push("error_support");
+  }
+
+  return Array.from(new Set(recs));
+}
+
+// ===== default stored state =====
+const DEFAULT_STATE = {
+  enabled: true,
+  intensity: 60,
+  assists: {
+    focus_mode: false,
+    reduce_distractions: false,
+    reading_ease: false,
+    step_by_step: false,
+    time_control: false,
+    focus_guide: false,
+    error_support: false,
+    dark_mode: false
+  }
+};
+
+chrome.runtime.onInstalled.addListener(async () => {
+  const existing = await chrome.storage.sync.get(["state"]);
+  if (!existing.state) {
+    await chrome.storage.sync.set({ state: DEFAULT_STATE });
   }
 });
 
-// ===== AI Status Service =====
-// For Transformers.js (in-browser model):
-// Status is tracked in content scripts via window.__aiClient.getAIStatus()
-// We relay status from the active tab
-
-const aiStatusState = {
-  cachedStatus: "initializing", // initializing | ready | error
-  lastCheckTab: null,
-  lastCheckTime: 0
-};
-
-async function getAIStatus() {
-  // Query the active tab for AI client status
+// Best-effort injection (helpful after extension reload without page refresh)
+async function injectContentScript(tabId) {
   try {
-    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    
-    if (!activeTab || !activeTab.id) {
-      return "unknown";
-    }
-
-    return new Promise((resolve) => {
-      chrome.tabs.sendMessage(
-        activeTab.id,
-        { action: "getAIStatus" },
-        (response) => {
-          if (chrome.runtime.lastError) {
-            console.warn("[Service Worker] Could not query AI status:", chrome.runtime.lastError.message);
-            resolve("unknown");
-          } else {
-            aiStatusState.cachedStatus = response?.status || "unknown";
-            aiStatusState.lastCheckTime = Date.now();
-            resolve(aiStatusState.cachedStatus);
-          }
-        }
-      );
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ["src/content/content_script.js"]
     });
-  } catch (error) {
-    console.warn("[Service Worker] AI Status query failed:", error.message);
-    return "unknown";
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String(e?.message || e) };
   }
 }
 
-// Listen for status requests from popup
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg.action === "checkAIHealth") {
-    getAIStatus().then((status) => {
-      // Map AI client status to health check response
-      const healthStatus = status === "ready" ? "connected" : "unavailable";
-      sendResponse({ status: healthStatus, aiStatus: status });
-    });
-    return true; // Keep channel open for async response
+  if (!msg || !msg.type) return;
+
+  if (msg.type === "INJECT_CONTENT_SCRIPT") {
+    injectContentScript(msg.tabId).then(sendResponse);
+    return true;
+  }
+
+  if (msg.type === "AI_RECOMMEND") {
+    const signals = msg.signals || {};
+    const recs = recommendAssists(signals);
+    sendResponse({ ok: true, recommendations: recs });
+    return true;
   }
 });
-
-console.log("[Service Worker] Initialized with Transformers.js in-browser AI");

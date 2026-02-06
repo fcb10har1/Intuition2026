@@ -52,18 +52,18 @@ async function saveResponses(markCompleted) {
 
 document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById(FORM_ID);
-  const skipBtn = document.getElementById("skipBtn");
 
   void loadExisting();
 
   form?.addEventListener("submit", async (e) => {
     e.preventDefault();
     await saveResponses(true);
-    setStatus("Saved. You can close this tab.");
-  });
-
-  skipBtn?.addEventListener("click", async () => {
-    await saveResponses(false);
-    setStatus("Skipped. You can return to this later from extension settings.");
+    try {
+      await chrome.runtime.sendMessage({ action: "onboardingSaved" });
+    } catch {
+      // No-op if background is unavailable
+    }
+    setStatus("Saved. Closing this tab...");
+    window.close();
   });
 });
