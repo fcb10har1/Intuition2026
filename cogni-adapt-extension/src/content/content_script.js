@@ -1,259 +1,873 @@
 /**
- * Dev 2 – Content Script (JS version)
- * Chrome loads THIS file
+ * Accessibility Layer - Content Script (Complete Rewrite)
+ * Professional, minimal, functional UI injected into webpages
  */
 
 (() => {
-  // Prevent double injection
-  if (window.__COGNI_FOCUS_INIT__) return;
-  window.__COGNI_FOCUS_INIT__ = true;
+  'use strict';
 
-  const HTML = document.documentElement;
-  const STYLE_ID = "cogni-focus-style";
-  const TOAST_ID = "cogni-focus-toast";
+  // ============================================================================
+  // CONFIGURATION
+  // ============================================================================
 
-  const DEFAULT_LEVEL = "med";
-
-  // Interaction tracking for AI context
-  const monitorState = {
-    score: 0,
-    scrollReversals: 0,
-    idlePeriods: 0,
-    lastActionT: performance.now(),
-    lastScrollY: window.scrollY,
-    lastDir: 0,
-    reversalTimes: [],
-    lastAIAdjustT: 0,
-    aiClient: window.__aiClient
+  const CONFIG = {
+    PREFIX: 'a11y',
+    STORAGE_KEY: 'a11y_settings',
+    Z_INDEX: 2147483640,
+    CURSOR_DEFAULTS: {
+      size: 'normal',
+      colour: 'blue'
+    },
+    CURSOR_SIZES: {
+      normal: { overlay: false },
+      enhanced: { overlay: true, size: '32px' },
+      large: { overlay: true, size: '48px' }
+    },
+    CURSOR_COLOURS: {
+      blue: '#2563eb',
+      teal: '#0d9488',
+      purple: '#7c3aed',
+      coral: '#f97316'
+    }
   };
 
-  function normalizeLevel(level) {
-    if (level === "mild" || level === "med" || level === "strong") {
-      return level;
-    }
-    return DEFAULT_LEVEL;
-  }
+  // ============================================================================
+  // STATE & ACTION HISTORY
+  // ============================================================================
 
-  function injectCssOnce() {
-    if (document.getElementById(STYLE_ID)) return;
+  let state = {
+    focusMode: false,
+    dyslexiaMode: false,
+    largeUIMode: false,
+    distractionCleaner: false,
+    cursorSize: CONFIG.CURSOR_DEFAULTS.size,
+    cursorColour: CONFIG.CURSOR_DEFAULTS.colour,
+    hiddenElements: [], // Track elements hidden by distraction cleaner
+  };
 
-    const link = document.createElement("link");
-    link.id = STYLE_ID;
-    link.rel = "stylesheet";
-    link.type = "text/css";
+  let actionHistory = []; // Stack for undo
 
-    link.href = chrome.runtime.getURL(
-      "src/content/adapt/css/focus_mode.css"
-    );
-
-    (document.head || document.documentElement).appendChild(link);
-  }
-
-  function setFocusEnabled(enabled) {
-    HTML.dataset.cogFocus = enabled ? "on" : "off";
-  }
-
-  function setLevel(level) {
-    HTML.dataset.cogLevel = level;
-  }
-
-  function showToast(text) {
-    let toast = document.getElementById(TOAST_ID);
-
-    if (!toast) {
-      toast = document.createElement("div");
-      toast.id = TOAST_ID;
-
-      toast.style.position = "fixed";
-      toast.style.right = "16px";
-      toast.style.bottom = "16px";
-      toast.style.zIndex = "2147483647";
-      toast.style.maxWidth = "280px";
-      toast.style.padding = "10px 12px";
-      toast.style.borderRadius = "12px";
-      toast.style.fontFamily =
-        "system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
-      toast.style.fontSize = "13px";
-      toast.style.lineHeight = "1.2";
-      toast.style.background = "rgba(20, 20, 20, 0.92)";
-      toast.style.color = "#fff";
-      toast.style.boxShadow = "0 8px 20px rgba(0,0,0,0.25)";
-      toast.style.backdropFilter = "blur(8px)";
-      toast.style.border = "1px solid rgba(255,255,255,0.12)";
-      toast.style.opacity = "0";
-      toast.style.transition = "opacity 120ms ease";
-
-      document.documentElement.appendChild(toast);
-    }
-
-    toast.textContent = text;
-    toast.style.opacity = "1";
-
-    if (toast.__hideTimer) clearTimeout(toast.__hideTimer);
-    toast.__hideTimer = setTimeout(() => {
-      toast.style.opacity = "0";
-    }, 1800);
-  }
-
-  function apply(enabled, level, announce = true) {
-    injectCssOnce();
-    setFocusEnabled(enabled);
-    setLevel(level);
-
-    if (announce) {
-      if (enabled) showToast(`Focus Mode: ON (${level})`);
-      else showToast("Focus Mode: OFF");
-    }
-  }
-
-  async function loadInitialStateFromStorage() {
+  async function loadSettings() {
     try {
-      const res = await chrome.storage.sync.get([
-        "focusEnabled",
-        "intensityLevel",
-        "onboardingResponses"
-      ]);
-
-      const enabled =
-        typeof res.focusEnabled === "boolean" ? res.focusEnabled : false;
-
-      const level = normalizeLevel(res.intensityLevel);
-
-      apply(enabled, level, false);
-
-      // If questionnaire completed, get AI recommendations
-      if (res.onboardingResponses && monitorState.aiClient) {
-        const interactions = {
-          scrollReversals: monitorState.scrollReversals,
-          idlePeriods: monitorState.idlePeriods,
-          overloadScore: monitorState.score
-        };
-        const recommendations = await monitorState.aiClient.getAIRecommendations(
-          res.onboardingResponses,
-          interactions
-        );
-        if (recommendations) {
-          applyAIRecommendations(recommendations);
-        }
-      }
-    } catch {
-      apply(false, DEFAULT_LEVEL, false);
-    }
-  }
-
-  function applyAIRecommendations(recs) {
-    if (!recs) return;
-
-    const source = recs.source || "unknown";
-    const focusLevel = normalizeLevel(recs.focus_level || DEFAULT_LEVEL);
-    const shouldEnable = recs.focus_mode || recs.reduce_distractions;
-
-    if (shouldEnable) {
-      apply(true, focusLevel, true);
-    }
-
-    if (recs.reading_ease) {
-      HTML.classList.add("assist-reading-ease");
-    }
-    if (recs.reduce_distractions) {
-      HTML.classList.add("assist-reduce-distractions");
-    }
-    if (recs.step_by_step) {
-      HTML.classList.add("assist-step-by-step");
-    }
-    if (recs.time_control) {
-      HTML.classList.add("assist-time-control");
-    }
-
-    const sourceLabel = source === "ai" ? "AI" : "Smart defaults";
-    console.log(`[Content] Applied recommendations from ${sourceLabel}`);
-    showToast(`✨ ${sourceLabel} adapted your view`);
-  }
-
-  function recordAction() {
-    monitorState.lastActionT = performance.now();
-  }
-
-  function onScroll() {
-    const y = window.scrollY;
-    const dy = y - monitorState.lastScrollY;
-    const dir = dy === 0 ? 0 : (dy > 0 ? 1 : -1);
-
-    if (dir !== 0 && monitorState.lastDir !== 0 && dir !== monitorState.lastDir) {
-      monitorState.reversalTimes.push(performance.now());
-      monitorState.scrollReversals++;
-    }
-
-    monitorState.lastDir = dir;
-    monitorState.lastScrollY = y;
-    recordAction();
-  }
-
-  async function maybeRefreshAIRecommendations() {
-    const now = performance.now();
-    if (!monitorState.aiClient || now - monitorState.lastAIAdjustT < 8000) return;
-
-    try {
-      const res = await chrome.storage.sync.get(["onboardingResponses"]);
-      if (!res.onboardingResponses) return;
-
-      const interactions = {
-        scrollReversals: monitorState.scrollReversals,
-        idlePeriods: monitorState.idlePeriods,
-        overloadScore: monitorState.score
-      };
-
-      const recommendations = await monitorState.aiClient.getAIRecommendations(
-        res.onboardingResponses,
-        interactions
-      );
-
-      if (recommendations) {
-        applyAIRecommendations(recommendations);
-        monitorState.lastAIAdjustT = now;
+      const stored = await chrome.storage.local.get(CONFIG.STORAGE_KEY);
+      if (stored[CONFIG.STORAGE_KEY]) {
+        state = { ...state, ...stored[CONFIG.STORAGE_KEY] };
       }
     } catch (e) {
-      console.warn("[Content] Failed to refresh recommendations:", e.message);
+      console.warn('Failed to load settings:', e);
     }
   }
 
-  function startInteractionMonitoring() {
-    const WINDOW_MS = 6000;
-    const REVERSAL_CLUSTER = 3;
-    const REVERSAL_POINTS = 18;
-    const IDLE_MS = 5000;
-    const IDLE_POINTS = 12;
-    const DECAY = 4;
-    const TICK_MS = 800;
+/**
+ * Accessibility Layer - Content Script (Complete Rewrite)
+ * Professional, minimal, functional UI injected into webpages
+ */
 
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("click", recordAction, true);
-    window.addEventListener("keydown", recordAction, true);
-    window.addEventListener("input", recordAction, true);
+(() => {
+  'use strict';
 
-    setInterval(async () => {
-      const t = performance.now();
+  // ============================================================================
+  // CONFIGURATION
+  // ============================================================================
 
-      monitorState.reversalTimes = monitorState.reversalTimes.filter((rt) => t - rt <= WINDOW_MS);
+  const CONFIG = {
+    PREFIX: 'a11y',
+    STORAGE_KEY: 'a11y_settings',
+    Z_INDEX: 2147483640,
+    CURSOR_DEFAULTS: {
+      size: 'normal',
+      colour: 'blue'
+    },
+    CURSOR_SIZES: {
+      normal: { overlay: false },
+      enhanced: { overlay: true, size: '32px' },
+      large: { overlay: true, size: '48px' }
+    },
+    CURSOR_COLOURS: {
+      blue: '#2563eb',
+      teal: '#0d9488',
+      purple: '#7c3aed',
+      coral: '#f97316'
+    }
+  };
 
-      if (monitorState.reversalTimes.length >= REVERSAL_CLUSTER) {
-        monitorState.score += REVERSAL_POINTS;
-        monitorState.reversalTimes.splice(0, Math.min(2, monitorState.reversalTimes.length));
+  // ============================================================================
+  // STATE & ACTION HISTORY
+  // ============================================================================
+
+  let state = {
+    focusMode: false,
+    dyslexiaMode: false,
+    largeUIMode: false,
+    distractionCleaner: false,
+    cursorSize: CONFIG.CURSOR_DEFAULTS.size,
+    cursorColour: CONFIG.CURSOR_DEFAULTS.colour,
+    hiddenElements: [],
+  };
+
+  let actionHistory = [];
+
+  async function loadSettings() {
+    try {
+      const stored = await chrome.storage.local.get(CONFIG.STORAGE_KEY);
+      if (stored[CONFIG.STORAGE_KEY]) {
+        state = { ...state, ...stored[CONFIG.STORAGE_KEY] };
       }
-
-      const idleFor = t - monitorState.lastActionT;
-      if (idleFor >= IDLE_MS) {
-        monitorState.score += IDLE_POINTS;
-        monitorState.idlePeriods++;
-        monitorState.lastActionT = t - 2500;
-      }
-
-      monitorState.score = Math.max(0, monitorState.score - DECAY);
-
-      // Periodically refresh AI recommendations based on new interaction data
-      await maybeRefreshAIRecommendations();
-    }, TICK_MS);
+    } catch (e) {
+      console.warn('Failed to load settings:', e);
+    }
   }
+
+  async function saveSettings() {
+    try {
+      await chrome.storage.local.set({ [CONFIG.STORAGE_KEY]: state });
+    } catch (e) {
+      console.warn('Failed to save settings:', e);
+    }
+  }
+
+  function recordAction(action) {
+    actionHistory.push(action);
+  }
+
+  function undo() {
+    const last = actionHistory.pop();
+    if (!last) return;
+
+    switch (last.type) {
+      case 'toggle_mode':
+        toggleMode(last.mode, true);
+        break;
+      case 'cursor_change':
+        restoreCursor(last.previous);
+        break;
+    }
+  }
+
+  function reset() {
+    state.focusMode && toggleMode('focus', true);
+    state.dyslexiaMode && toggleMode('dyslexia', true);
+    state.largeUIMode && toggleMode('largeUI', true);
+    state.distractionCleaner && toggleMode('distractionCleaner', true);
+
+    state.cursorSize = CONFIG.CURSOR_DEFAULTS.size;
+    state.cursorColour = CONFIG.CURSOR_DEFAULTS.colour;
+    applyCursorStyles();
+
+    actionHistory = [];
+  }
+
+  // ============================================================================
+  // STYLING & INJECTION
+  // ============================================================================
+
+  function injectStyleSheet() {
+    if (document.getElementById(`${CONFIG.PREFIX}-styles`)) return;
+
+    const style = document.createElement('style');
+    style.id = `${CONFIG.PREFIX}-styles`;
+    style.textContent = getStylesCSS();
+    document.head.appendChild(style);
+  }
+
+  function getStylesCSS() {
+    return `
+      /* Accessibility Layer Styles */
+      
+      /* === FLOATING BUTTON === */
+      .${CONFIG.PREFIX}-orb {
+        position: fixed;
+        bottom: 32px;
+        right: 32px;
+        z-index: ${CONFIG.Z_INDEX};
+        width: 56px;
+        height: 56px;
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+        border: none;
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 16px rgba(37, 99, 235, 0.3);
+        transition: all 0.2s ease;
+        padding: 0;
+        font-size: 0;
+      }
+
+      .${CONFIG.PREFIX}-orb:hover {
+        transform: scale(1.08);
+        box-shadow: 0 6px 24px rgba(37, 99, 235, 0.4);
+      }
+
+      .${CONFIG.PREFIX}-orb:active {
+        transform: scale(0.96);
+      }
+
+      .${CONFIG.PREFIX}-orb:focus-visible {
+        outline: 2px solid #2563eb;
+        outline-offset: 2px;
+      }
+
+      .${CONFIG.PREFIX}-orb svg {
+        width: 28px;
+        height: 28px;
+        fill: white;
+      }
+
+      /* === PANEL === */
+      .${CONFIG.PREFIX}-panel {
+        position: fixed;
+        bottom: 96px;
+        right: 32px;
+        z-index: ${CONFIG.Z_INDEX - 1};
+        width: 320px;
+        background: #ffffff;
+        border-radius: 16px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
+        border: 1px solid #e5e7eb;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        max-height: 75vh;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        animation: slideUp 0.2s ease;
+      }
+
+      @keyframes slideUp {
+        from {
+          opacity: 0;
+          transform: translateY(12px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .${CONFIG.PREFIX}-panel-header {
+        padding: 20px;
+        border-bottom: 1px solid #e5e7eb;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .${CONFIG.PREFIX}-panel-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: #111827;
+      }
+
+      .${CONFIG.PREFIX}-panel-close {
+        background: none;
+        border: none;
+        font-size: 20px;
+        color: #6b7280;
+        cursor: pointer;
+        padding: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+        transition: all 0.2s;
+      }
+
+      .${CONFIG.PREFIX}-panel-close:hover {
+        background: #f3f4f6;
+        color: #111827;
+      }
+
+      .${CONFIG.PREFIX}-panel-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      .${CONFIG.PREFIX}-panel-body::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      .${CONFIG.PREFIX}-panel-body::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 3px;
+      }
+
+      /* === SECTION === */
+      .${CONFIG.PREFIX}-section {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .${CONFIG.PREFIX}-label {
+        font-size: 12px;
+        font-weight: 700;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      /* === TOGGLE BUTTONS (Modes) === */
+      .${CONFIG.PREFIX}-mode-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+
+      .${CONFIG.PREFIX}-mode-btn {
+        padding: 12px;
+        background: #f9fafb;
+        border: 2px solid #e5e7eb;
+        border-radius: 10px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+        color: #374151;
+        transition: all 0.2s;
+        font-family: inherit;
+      }
+
+      .${CONFIG.PREFIX}-mode-btn:hover {
+        border-color: #2563eb;
+        background: #f0f7ff;
+      }
+
+      .${CONFIG.PREFIX}-mode-btn.active {
+        background: #dbeafe;
+        border-color: #2563eb;
+        color: #1d4ed8;
+      }
+
+      /* === SELECT / SEGMENTED CONTROL === */
+      .${CONFIG.PREFIX}-select {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 6px;
+      }
+
+      .${CONFIG.PREFIX}-select-btn {
+        padding: 10px;
+        background: #f3f4f6;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 600;
+        color: #6b7280;
+        transition: all 0.15s;
+        font-family: inherit;
+      }
+
+      .${CONFIG.PREFIX}-select-btn:hover {
+        background: #e5e7eb;
+      }
+
+      .${CONFIG.PREFIX}-select-btn.active {
+        background: #2563eb;
+        color: white;
+        border-color: #2563eb;
+      }
+
+      /* === ACTION BUTTONS === */
+      .${CONFIG.PREFIX}-action-group {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+
+      .${CONFIG.PREFIX}-action-btn {
+        padding: 12px;
+        background: #f3f4f6;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+        color: #374151;
+        transition: all 0.2s;
+        font-family: inherit;
+      }
+
+      .${CONFIG.PREFIX}-action-btn:hover {
+        background: #e5e7eb;
+        border-color: #d1d5db;
+      }
+
+      .${CONFIG.PREFIX}-action-btn:active {
+        transform: scale(0.98);
+      }
+
+      /* === MODES STYLING === */
+      html.${CONFIG.PREFIX}-focus-mode {
+        filter: brightness(0.95);
+      }
+
+      html.${CONFIG.PREFIX}-dyslexia-mode {
+        font-family: 'Segoe UI', 'Arial', sans-serif;
+        letter-spacing: 0.05em;
+        line-height: 1.8;
+      }
+
+      html.${CONFIG.PREFIX}-dyslexia-mode body {
+        background-color: #fffcf0 !important;
+      }
+
+      html.${CONFIG.PREFIX}-large-ui-mode button,
+      html.${CONFIG.PREFIX}-large-ui-mode [role="button"],
+      html.${CONFIG.PREFIX}-large-ui-mode a,
+      html.${CONFIG.PREFIX}-large-ui-mode input {
+        min-height: 48px !important;
+        padding: 16px 20px !important;
+        font-size: 16px !important;
+      }
+
+      html.${CONFIG.PREFIX}-distraction-mode .${CONFIG.PREFIX}-hidden {
+        display: none !important;
+      }
+
+      /* === TOAST === */
+      .${CONFIG.PREFIX}-toast {
+        position: fixed;
+        bottom: 100px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.9);
+        color: white;
+        padding: 12px 16px;
+        border-radius: 8px;
+        font-size: 13px;
+        z-index: ${CONFIG.Z_INDEX - 2};
+        animation: fadeInUp 0.2s ease;
+      }
+
+      @keyframes fadeInUp {
+        from {
+          opacity: 0;
+          transform: translateX(-50%) translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateX(-50%) translateY(0);
+        }
+      }
+    `;
+  }
+
+  // ============================================================================
+  // MODE TOGGLES
+  // ============================================================================
+
+  function toggleMode(mode, skipRecord = false) {
+    const recordActionFlag = !skipRecord;
+
+    switch (mode) {
+      case 'focus':
+        state.focusMode = !state.focusMode;
+        document.documentElement.classList.toggle(`${CONFIG.PREFIX}-focus-mode`);
+        if (recordActionFlag) recordAction({ type: 'toggle_mode', mode: 'focus' });
+        showNotification(state.focusMode ? 'Focus Mode enabled' : 'Focus Mode disabled');
+        break;
+
+      case 'dyslexia':
+        state.dyslexiaMode = !state.dyslexiaMode;
+        document.documentElement.classList.toggle(`${CONFIG.PREFIX}-dyslexia-mode`);
+        if (recordActionFlag) recordAction({ type: 'toggle_mode', mode: 'dyslexia' });
+        showNotification(state.dyslexiaMode ? 'Dyslexia Mode enabled' : 'Dyslexia Mode disabled');
+        break;
+
+      case 'largeUI':
+        state.largeUIMode = !state.largeUIMode;
+        document.documentElement.classList.toggle(`${CONFIG.PREFIX}-large-ui-mode`);
+        if (recordActionFlag) recordAction({ type: 'toggle_mode', mode: 'largeUI' });
+        showNotification(state.largeUIMode ? 'Large UI enabled' : 'Large UI disabled');
+        break;
+
+      case 'distractionCleaner':
+        state.distractionCleaner = !state.distractionCleaner;
+        if (state.distractionCleaner) {
+          applyDistractionCleaner();
+        } else {
+          restoreDistractionCleaner();
+        }
+        document.documentElement.classList.toggle(`${CONFIG.PREFIX}-distraction-mode`);
+        if (recordActionFlag) recordAction({ type: 'toggle_mode', mode: 'distractionCleaner' });
+        showNotification(state.distractionCleaner ? 'Distraction Cleaner enabled' : 'Distraction Cleaner disabled');
+        break;
+    }
+
+    saveSettings();
+    updatePanelUI();
+  }
+
+  // ============================================================================
+  // DISTRACTION CLEANER
+  // ============================================================================
+
+  const DISTRACTION_SELECTORS = [
+    '[class*="ad-"], [id*="ad-"], .advertisement, .advert',
+    '[class*="modal"], [class*="popup"], [class*="overlay"]',
+    '.newsletter, .email-signup, .subscribe',
+    '.social, [class*="share"]',
+    '[src*="analytics"], [src*="tracking"]'
+  ];
+
+  function applyDistractionCleaner() {
+    state.hiddenElements = [];
+    DISTRACTION_SELECTORS.forEach(selector => {
+      try {
+        document.querySelectorAll(selector).forEach(el => {
+          if (el && el.offsetHeight > 0) {
+            el.classList.add(`${CONFIG.PREFIX}-hidden`);
+            state.hiddenElements.push(el);
+          }
+        });
+      } catch (e) {
+        // Invalid selector
+      }
+    });
+  }
+
+  function restoreDistractionCleaner() {
+    state.hiddenElements.forEach(el => {
+      if (el && el.parentNode) {
+        el.classList.remove(`${CONFIG.PREFIX}-hidden`);
+      }
+    });
+    state.hiddenElements = [];
+  }
+
+  // ============================================================================
+  // CURSOR CUSTOMIZATION
+  // ============================================================================
+
+  let cursorOverlay = null;
+  let rafId = null;
+  let lastMousePos = { x: 0, y: 0 };
+
+  function applyCursorStyles() {
+    const htmlEl = document.documentElement;
+
+    if (state.cursorSize === 'normal') {
+      // Remove overlay, restore native cursor
+      hideCursorOverlay();
+      htmlEl.style.cursor = 'auto';
+    } else {
+      // Hide native cursor, show magnified overlay instead
+      htmlEl.style.cursor = 'none';
+      showCursorOverlay(state.cursorSize, state.cursorColour);
+    }
+  }
+
+  function showCursorOverlay(size, colour) {
+    if (!cursorOverlay) {
+      cursorOverlay = document.createElement('div');
+      cursorOverlay.id = `${CONFIG.PREFIX}-cursor-magnifier`;
+      cursorOverlay.style.cssText = `
+        position: fixed;
+        pointer-events: none;
+        z-index: ${CONFIG.Z_INDEX - 2};
+        display: none;
+      `;
+      document.body.appendChild(cursorOverlay);
+
+      // Track mouse position globally
+      document.addEventListener('mousemove', (e) => {
+        lastMousePos.x = e.clientX;
+        lastMousePos.y = e.clientY;
+      });
+    }
+
+    cursorOverlay.style.display = 'block';
+
+    // Set size for magnified arrow
+    const sizes = {
+      'enhanced': 48,
+      'large': 72
+    };
+    const pixelSize = sizes[size] || 48;
+    const arrowColour = CONFIG.CURSOR_COLOURS[colour] || '#2563eb';
+
+    // Stroke width scales proportionally (2px @ 48px, ~3px @ 72px)
+    const strokeWidth = (2 * pixelSize) / 48;
+
+    // SVG arrow - clean standard Chrome pointer, simple and functional
+    // 48x48 for Enhanced, 72x72 for Large
+    const arrowSVG = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 32" width="${pixelSize}" height="${pixelSize}" preserveAspectRatio="xMinYMin meet">
+        <path d="M 0 0 L 0 22 L 4 19 L 8 28 L 12 25 L 8 16 L 13 6 Z" 
+              fill="${arrowColour}" 
+              stroke="#111111" 
+              stroke-width="${strokeWidth}"
+              stroke-linejoin="round"
+              stroke-linecap="round"/>
+      </svg>
+    `;
+
+    cursorOverlay.innerHTML = arrowSVG;
+
+    // Start RAF loop for smooth tracking
+    if (!rafId) {
+      function updateCursorPosition() {
+        if (cursorOverlay && cursorOverlay.style.display === 'block') {
+          // Position so arrow tip aligns with actual cursor position
+          // Tip is at (2, 2) in viewBox, so offset slightly
+          cursorOverlay.style.left = (lastMousePos.x) + 'px';
+          cursorOverlay.style.top = (lastMousePos.y) + 'px';
+        }
+        rafId = requestAnimationFrame(updateCursorPosition);
+      }
+      rafId = requestAnimationFrame(updateCursorPosition);
+    }
+  }
+
+  function hideCursorOverlay() {
+    if (cursorOverlay) {
+      cursorOverlay.style.display = 'none';
+    }
+    if (rafId) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+  }
+
+  function setCursorSize(size) {
+    const prev = state.cursorSize;
+    state.cursorSize = size;
+    applyCursorStyles();
+    recordAction({ type: 'cursor_change', previous: { size: prev, colour: state.cursorColour } });
+    saveSettings();
+    updatePanelUI();
+  }
+
+  function setCursorColour(colour) {
+    const prev = state.cursorColour;
+    state.cursorColour = colour;
+    applyCursorStyles();
+    recordAction({ type: 'cursor_change', previous: { size: state.cursorSize, colour: prev } });
+    saveSettings();
+    updatePanelUI();
+  }
+
+  function restoreCursor(previous) {
+    state.cursorSize = previous.size;
+    state.cursorColour = previous.colour;
+    applyCursorStyles();
+  }
+
+  // ============================================================================
+  // NOTIFICATIONS
+  // ============================================================================
+
+  function showNotification(message) {
+    const toast = document.createElement('div');
+    toast.className = `${CONFIG.PREFIX}-toast`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+      toast.style.animation = 'fadeInUp 0.2s ease reverse';
+      setTimeout(() => toast.remove(), 200);
+    }, 2000);
+  }
+
+  // ============================================================================
+  // UI RENDERING
+  // ============================================================================
+
+  function getOrbSVG() {
+    return `
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M13 2a1 1 0 11-2 0 1 1 0 012 0Z"/>
+        <path d="M18.378 5.622a1 1 0 11-1.414-1.414 1 1 0 011.414 1.414Z"/>
+        <path d="M21 11a1 1 0 11 0-2 1 1 0 010 2Z"/>
+        <path d="M18.378 18.378a1 1 0 11-1.414-1.414 1 1 0 011.414 1.414Z"/>
+        <path d="M13 21a1 1 0 11-2 0 1 1 0 012 0Z"/>
+        <path d="M5.622 18.378a1 1 0 11-1.414-1.414 1 1 0 011.414 1.414Z"/>
+        <path d="M3 13a1 1 0 11 0-2 1 1 0 010 2Z"/>
+        <path d="M5.622 5.622a1 1 0 11-1.414-1.414 1 1 0 011.414 1.414Z"/>
+        <circle cx="12" cy="12" r="3" fill="currentColor"/>
+      </svg>
+    `;
+  }
+
+  function createPanel() {
+    const panel = document.createElement('div');
+    panel.id = `${CONFIG.PREFIX}-panel`;
+    panel.className = `${CONFIG.PREFIX}-panel`;
+
+    panel.innerHTML = `
+      <div class="${CONFIG.PREFIX}-panel-header">
+        <div class="${CONFIG.PREFIX}-panel-title">Accessibility</div>
+        <button class="${CONFIG.PREFIX}-panel-close" aria-label="Close">×</button>
+      </div>
+
+      <div class="${CONFIG.PREFIX}-panel-body">
+        <div class="${CONFIG.PREFIX}-section">
+          <div class="${CONFIG.PREFIX}-label">Modes</div>
+          <div class="${CONFIG.PREFIX}-mode-grid">
+            <button class="${CONFIG.PREFIX}-mode-btn ${state.focusMode ? 'active' : ''}" data-mode="focus">Focus</button>
+            <button class="${CONFIG.PREFIX}-mode-btn ${state.dyslexiaMode ? 'active' : ''}" data-mode="dyslexia">Dyslexia</button>
+            <button class="${CONFIG.PREFIX}-mode-btn ${state.largeUIMode ? 'active' : ''}" data-mode="largeUI">Large UI</button>
+            <button class="${CONFIG.PREFIX}-mode-btn ${state.distractionCleaner ? 'active' : ''}" data-mode="distractionCleaner">Clean</button>
+          </div>
+        </div>
+
+        <div class="${CONFIG.PREFIX}-section">
+          <div class="${CONFIG.PREFIX}-label">Cursor Size</div>
+          <div class="${CONFIG.PREFIX}-select">
+            <button class="${CONFIG.PREFIX}-select-btn ${state.cursorSize === 'normal' ? 'active' : ''}" data-cursor-size="normal">Normal</button>
+            <button class="${CONFIG.PREFIX}-select-btn ${state.cursorSize === 'enhanced' ? 'active' : ''}" data-cursor-size="enhanced">Enhanced</button>
+            <button class="${CONFIG.PREFIX}-select-btn ${state.cursorSize === 'large' ? 'active' : ''}" data-cursor-size="large">Large</button>
+          </div>
+        </div>
+
+        <div class="${CONFIG.PREFIX}-section">
+          <div class="${CONFIG.PREFIX}-label">Cursor Colour</div>
+          <div class="${CONFIG.PREFIX}-select">
+            <button class="${CONFIG.PREFIX}-select-btn ${state.cursorColour === 'blue' ? 'active' : ''}" data-cursor-colour="blue">Blue</button>
+            <button class="${CONFIG.PREFIX}-select-btn ${state.cursorColour === 'teal' ? 'active' : ''}" data-cursor-colour="teal">Teal</button>
+            <button class="${CONFIG.PREFIX}-select-btn ${state.cursorColour === 'purple' ? 'active' : ''}" data-cursor-colour="purple">Purple</button>
+          </div>
+        </div>
+
+        <div class="${CONFIG.PREFIX}-section">
+          <div class="${CONFIG.PREFIX}-action-group">
+            <button class="${CONFIG.PREFIX}-action-btn" data-action="undo">Undo</button>
+            <button class="${CONFIG.PREFIX}-action-btn" data-action="reset">Reset</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(panel);
+    attachPanelListeners(panel);
+  }
+
+  function attachPanelListeners(panel) {
+    panel.querySelector(`.${CONFIG.PREFIX}-panel-close`).addEventListener('click', hidePanel);
+
+    panel.querySelectorAll(`[data-mode]`).forEach(btn => {
+      btn.addEventListener('click', () => toggleMode(btn.dataset.mode));
+    });
+
+    panel.querySelectorAll(`[data-cursor-size]`).forEach(btn => {
+      btn.addEventListener('click', () => setCursorSize(btn.dataset.cursorSize));
+    });
+
+    panel.querySelectorAll(`[data-cursor-colour]`).forEach(btn => {
+      btn.addEventListener('click', () => setCursorColour(btn.dataset.cursorColour));
+    });
+
+    panel.querySelector(`[data-action="undo"]`).addEventListener('click', () => {
+      undo();
+      updatePanelUI();
+    });
+
+    panel.querySelector(`[data-action="reset"]`).addEventListener('click', () => {
+      reset();
+      updatePanelUI();
+      showNotification('Page reset');
+    });
+  }
+
+  function updatePanelUI() {
+    const panel = document.getElementById(`${CONFIG.PREFIX}-panel`);
+    if (!panel) return;
+
+    panel.querySelector(`[data-mode="focus"]`).classList.toggle('active', state.focusMode);
+    panel.querySelector(`[data-mode="dyslexia"]`).classList.toggle('active', state.dyslexiaMode);
+    panel.querySelector(`[data-mode="largeUI"]`).classList.toggle('active', state.largeUIMode);
+    panel.querySelector(`[data-mode="distractionCleaner"]`).classList.toggle('active', state.distractionCleaner);
+
+    panel.querySelectorAll(`[data-cursor-size]`).forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.cursorSize === state.cursorSize);
+    });
+
+    panel.querySelectorAll(`[data-cursor-colour]`).forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.cursorColour === state.cursorColour);
+    });
+  }
+
+  function hidePanel() {
+    const panel = document.getElementById(`${CONFIG.PREFIX}-panel`);
+    if (panel) panel.remove();
+  }
+
+  function showPanel() {
+    if (document.getElementById(`${CONFIG.PREFIX}-panel`)) return;
+    createPanel();
+  }
+
+  function togglePanel() {
+    if (document.getElementById(`${CONFIG.PREFIX}-panel`)) {
+      hidePanel();
+    } else {
+      showPanel();
+    }
+  }
+
+  // ============================================================================
+  // ORB BUTTON
+  // ============================================================================
+
+  function createOrb() {
+    const orb = document.createElement('button');
+    orb.id = `${CONFIG.PREFIX}-orb`;
+    orb.className = `${CONFIG.PREFIX}-orb`;
+    orb.innerHTML = getOrbSVG();
+    orb.setAttribute('aria-label', 'Accessibility Controls');
+    orb.setAttribute('aria-expanded', 'false');
+
+    orb.addEventListener('click', togglePanel);
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') hidePanel();
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest(`#${CONFIG.PREFIX}-orb`) && !e.target.closest(`#${CONFIG.PREFIX}-panel`)) {
+        hidePanel();
+      }
+    });
+
+    document.body.appendChild(orb);
+  }
+
+  // ============================================================================
+  // INITIALIZATION
+  // ============================================================================
+
+  async function init() {
+    if (window.__A11Y_INJECTED__) return;
+    window.__A11Y_INJECTED__ = true;
+
+    await loadSettings();
+    injectStyleSheet();
+    createOrb();
+
+    if (state.focusMode) document.documentElement.classList.add(`${CONFIG.PREFIX}-focus-mode`);
+    if (state.dyslexiaMode) document.documentElement.classList.add(`${CONFIG.PREFIX}-dyslexia-mode`);
+    if (state.largeUIMode) document.documentElement.classList.add(`${CONFIG.PREFIX}-large-ui-mode`);
+    if (state.distractionCleaner) {
+      applyDistractionCleaner();
+      document.documentElement.classList.add(`${CONFIG.PREFIX}-distraction-mode`);
+    }
+
+    applyCursorStyles();
+
+    console.log('Accessibility layer initialized');
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
 
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (!msg) return;
