@@ -20,68 +20,8 @@
     },
     CURSOR_SIZES: {
       normal: { overlay: false },
-      enhanced: { overlay: true, size: '32px' },
-      large: { overlay: true, size: '48px' }
-    },
-    CURSOR_COLOURS: {
-      blue: '#2563eb',
-      teal: '#0d9488',
-      purple: '#7c3aed',
-      coral: '#f97316'
-    }
-  };
-
-  // ============================================================================
-  // STATE & ACTION HISTORY
-  // ============================================================================
-
-  let state = {
-    focusMode: false,
-    dyslexiaMode: false,
-    largeUIMode: false,
-    distractionCleaner: false,
-    cursorSize: CONFIG.CURSOR_DEFAULTS.size,
-    cursorColour: CONFIG.CURSOR_DEFAULTS.colour,
-    hiddenElements: [], // Track elements hidden by distraction cleaner
-  };
-
-  let actionHistory = []; // Stack for undo
-
-  async function loadSettings() {
-    try {
-      const stored = await chrome.storage.local.get(CONFIG.STORAGE_KEY);
-      if (stored[CONFIG.STORAGE_KEY]) {
-        state = { ...state, ...stored[CONFIG.STORAGE_KEY] };
-      }
-    } catch (e) {
-      console.warn('Failed to load settings:', e);
-    }
-  }
-
-/**
- * Accessibility Layer - Content Script (Complete Rewrite)
- * Professional, minimal, functional UI injected into webpages
- */
-
-(() => {
-  'use strict';
-
-  // ============================================================================
-  // CONFIGURATION
-  // ============================================================================
-
-  const CONFIG = {
-    PREFIX: 'a11y',
-    STORAGE_KEY: 'a11y_settings',
-    Z_INDEX: 2147483640,
-    CURSOR_DEFAULTS: {
-      size: 'normal',
-      colour: 'blue'
-    },
-    CURSOR_SIZES: {
-      normal: { overlay: false },
-      enhanced: { overlay: true, size: '32px' },
-      large: { overlay: true, size: '48px' }
+      enhanced: { overlay: true, size: '48px' },
+      large: { overlay: true, size: '72px' }
     },
     CURSOR_COLOURS: {
       blue: '#2563eb',
@@ -125,6 +65,10 @@
       console.warn('Failed to save settings:', e);
     }
   }
+
+  // ============================================================================
+  // ACTION HISTORY (for undo/reset)
+  // ============================================================================
 
   function recordAction(action) {
     actionHistory.push(action);
@@ -614,7 +558,6 @@
       function updateCursorPosition() {
         if (cursorOverlay && cursorOverlay.style.display === 'block') {
           // Position so arrow tip aligns with actual cursor position
-          // Tip is at (2, 2) in viewBox, so offset slightly
           cursorOverlay.style.left = (lastMousePos.x) + 'px';
           cursorOverlay.style.top = (lastMousePos.y) + 'px';
         }
@@ -867,42 +810,4 @@
   } else {
     init();
   }
-})();
-
-  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-    if (!msg) return;
-
-    // Handle action-based messages (for service worker)
-    if (msg.action === "getAIStatus") {
-      const aiStatus = window.__aiClient?.getAIStatus?.() || "unknown";
-      sendResponse({ status: aiStatus });
-      return true;
-    }
-
-    // Handle legacy type-based messages (for popup)
-    if (typeof msg.type !== "string") return;
-
-    if (msg.type === "TOGGLE_FOCUS") {
-      const enabled = !!msg.enabled;
-      const currentLevel = normalizeLevel(HTML.dataset.cogLevel);
-
-      apply(enabled, currentLevel, true);
-
-      if (sendResponse) sendResponse({ ok: true });
-      return true;
-    }
-
-    if (msg.type === "SET_INTENSITY") {
-      const level = normalizeLevel(msg.level);
-      const enabled = HTML.dataset.cogFocus === "on";
-
-      apply(enabled, level, true);
-
-      if (sendResponse) sendResponse({ ok: true });
-      return true;
-    }
-  });
-
-  loadInitialStateFromStorage();
-  startInteractionMonitoring();
 })();
