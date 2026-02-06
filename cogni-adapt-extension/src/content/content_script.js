@@ -255,40 +255,56 @@
 
     cursorOverlay.style.display = 'block';
 
-    const sizes = { 'enhanced': 28, 'large': 40 };
-    const pixelSize = sizes[size] || 28;
+    const sizes = { 'enhanced': 32, 'large': 48 };
+    const pixelSize = sizes[size] || 32;
     const cursorColour = CONFIG.CURSOR_COLOURS[colour] || '#2563eb';
-    const strokeWidth = size === 'large' ? 1.4 : 1;
+    const strokeWidth = size === 'large' ? 2.5 : 2;
 
-    // Clean pointing hand cursor - like a standard pointer
+    // Proper chunky pointing hand cursor matching reference
     const pointingHandSVG = `
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 24" width="${pixelSize}" height="${pixelSize}" preserveAspectRatio="xMidYMid meet" style="position:absolute; left:0; top:0;">
-        <!-- Index finger pointing up -->
-        <path d="M 10 1 L 12 8 L 14 6 L 15 14 Q 15 16 13 17 L 12 17 Q 10 16 10 14 L 10 1" 
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 40" width="${pixelSize}" height="${Math.round(pixelSize * 1.25)}" preserveAspectRatio="xMidYMid meet" style="position:absolute; left:0; top:0;">
+        <!-- Index finger pointing up (main) -->
+        <path d="M 16 2 L 22 2 L 22 14 Q 22 18 18 20 L 14 20 Q 10 18 10 14 L 10 8 L 16 2" 
               fill="${cursorColour}" 
               stroke="#1a1a1a" 
               stroke-width="${strokeWidth}"
               stroke-linejoin="round"
               stroke-linecap="round"/>
         
-        <!-- Other fingers folded -->
-        <path d="M 8 9 Q 6 10 5 12 Q 4 14 6 15 Q 8 14 8 12" 
+        <!-- Middle finger curled -->
+        <path d="M 10 14 Q 8 16 7 19 Q 7 21 9 22 Q 11 21 12 18" 
               fill="${cursorColour}" 
               stroke="#1a1a1a" 
               stroke-width="${strokeWidth}"
               stroke-linejoin="round"
               stroke-linecap="round"/>
         
-        <!-- Thumb -->
-        <path d="M 8 10 Q 5 11 4 13 Q 3 14 5 15 Q 7 14 8 12" 
+        <!-- Ring finger curled -->
+        <path d="M 26 14 Q 28 16 29 19 Q 29 21 27 22 Q 25 21 24 18" 
               fill="${cursorColour}" 
               stroke="#1a1a1a" 
               stroke-width="${strokeWidth}"
               stroke-linejoin="round"
               stroke-linecap="round"/>
         
-        <!-- Palm -->
-        <path d="M 8 14 L 10 14 Q 12 15 14 13 L 15 14 Q 13 17 10 18 Q 7 17 6 15 Z" 
+        <!-- Pinky finger curled -->
+        <path d="M 24 18 Q 26 20 27 23 Q 27 25 25 25 Q 23 24 22 21" 
+              fill="${cursorColour}" 
+              stroke="#1a1a1a" 
+              stroke-width="${strokeWidth}"
+              stroke-linejoin="round"
+              stroke-linecap="round"/>
+        
+        <!-- Thumb on left -->
+        <path d="M 10 14 Q 6 14 4 16 Q 2 18 4 20 Q 8 19 10 16" 
+              fill="${cursorColour}" 
+              stroke="#1a1a1a" 
+              stroke-width="${strokeWidth}"
+              stroke-linejoin="round"
+              stroke-linecap="round"/>
+        
+        <!-- Palm/base joining everything -->
+        <path d="M 10 20 Q 8 24 10 28 Q 14 32 20 32 Q 26 32 30 28 Q 32 24 30 20 Q 24 22 20 22 Q 14 22 10 20" 
               fill="${cursorColour}" 
               stroke="#1a1a1a" 
               stroke-width="${strokeWidth}"
@@ -302,7 +318,15 @@
     if (!rafId) {
       function updateCursorPosition() {
         if (cursorOverlay && cursorOverlay.style.display === 'block') {
-          // Position at index finger tip
+          // Position so index finger tip aligns with cursor
+          cursorOverlay.style.left = (lastMousePos.x - pixelSize * 0.35) + 'px';
+          cursorOverlay.style.top = (lastMousePos.y - pixelSize * 0.1) + 'px';
+        }
+        rafId = requestAnimationFrame(updateCursorPosition);
+      }
+      rafId = requestAnimationFrame(updateCursorPosition);
+    }
+  }
           cursorOverlay.style.left = (lastMousePos.x - pixelSize * 0.4) + 'px';
           cursorOverlay.style.top = (lastMousePos.y - pixelSize * 0.05) + 'px';
         }
