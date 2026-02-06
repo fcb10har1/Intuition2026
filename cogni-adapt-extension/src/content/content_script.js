@@ -16,6 +16,9 @@
 
   // Detailed interaction tracking for real-time AI recommendations
   const monitorState = {
+    // Extension control
+    extensionEnabled: false,
+    
     // Basic cognitive load metrics
     score: 0,
     scrollReversals: 0,
@@ -142,6 +145,9 @@
 
       const level = normalizeLevel(res.intensityLevel);
 
+      // Set extension enabled flag
+      monitorState.extensionEnabled = enabled;
+
       apply(enabled, level, false);
 
       // If questionnaire completed, get AI recommendations
@@ -190,26 +196,284 @@
     const focusLevel = normalizeLevel(recs.focus_level || DEFAULT_LEVEL);
     const shouldEnable = recs.focus_mode || recs.reduce_distractions;
 
+    // Track what's being applied for transparency
+    const appliedChanges = [];
+    const reasons = [];
+
+    // Determine primary reason from patterns
+    let primaryReason = "Optimizing your experience";
+    if (recs.detectedPatterns && recs.detectedPatterns.length > 0) {
+      const topPattern = recs.detectedPatterns.find(p => p.severity === 'high');
+      if (topPattern) {
+        primaryReason = topPattern.description;
+      } else {
+        primaryReason = recs.detectedPatterns[0].description;
+      }
+    }
+
+    // ===== FOCUS MODE =====
     if (shouldEnable) {
       apply(true, focusLevel, true);
+      appliedChanges.push(`Focus Mode (${focusLevel})`);
+      
+      let reason = "Clutter & visual overload detected → Simplified interface";
+      if (recs.detectedPatterns) {
+        const thrashPattern = recs.detectedPatterns.find(p => p.pattern === 'Scroll Thrashing');
+        const overloadPattern = recs.detectedPatterns.find(p => p.pattern === 'Cognitive Overload');
+        if (thrashPattern) reason = `${thrashPattern.description} → Simplifying layout`;
+        else if (overloadPattern) reason = `${overloadPattern.description} → Focusing interface`;
+      }
+      reasons.push(reason);
+      logChange("FOCUS_MODE", focusLevel, "Reduces distractions");
     }
 
+    // ===== READING EASE =====
     if (recs.reading_ease) {
       HTML.classList.add("assist-reading-ease");
-    }
-    if (recs.reduce_distractions) {
-      HTML.classList.add("assist-reduce-distractions");
-    }
-    if (recs.step_by_step) {
-      HTML.classList.add("assist-step-by-step");
-    }
-    if (recs.time_control) {
-      HTML.classList.add("assist-time-control");
+      appliedChanges.push("Reading Ease");
+      
+      let reason = "Dense text difficulty detected → Improved spacing & typography";
+      if (recs.detectedPatterns) {
+        const pausePattern = recs.detectedPatterns.find(p => p.pattern === 'Paused/Stuck');
+        if (pausePattern) reason = `${pausePattern.description} → Enhancing readability`;
+      }
+      reasons.push(reason);
+      logChange("READING_EASE", "enabled", "Larger fonts, better line-height");
     }
 
-    const sourceLabel = source === "ai" ? "AI" : "Smart defaults";
-    console.log(`[Content] Applied recommendations from ${sourceLabel}`);
-    showToast(`✨ ${sourceLabel} adapted your view`);
+    // ===== REDUCE DISTRACTIONS =====
+    if (recs.reduce_distractions) {
+      HTML.classList.add("assist-reduce-distractions");
+      appliedChanges.push("Reduce Distractions");
+      
+      let reason = "Motion sensitivity or distraction patterns → Hides ads & animated elements";
+      if (recs.detectedPatterns) {
+        const jitterPattern = recs.detectedPatterns.find(p => p.pattern === 'Scroll Jitter');
+        if (jitterPattern) reason = `${jitterPattern.description} → Removing motion triggers`;
+      }
+      reasons.push(reason);
+      logChange("REDUCE_DISTRACTIONS", "enabled", "Ads, popups, animations hidden");
+    }
+
+    // ===== STEP BY STEP =====
+    if (recs.step_by_step) {
+      HTML.classList.add("assist-step-by-step");
+      appliedChanges.push("Step-by-Step Guidance");
+      
+      let reason = "Preference for structured guidance → Highlights primary actions";
+      if (recs.detectedPatterns) {
+        const rageClickPattern = recs.detectedPatterns.find(p => p.pattern === 'Rapid Clicking');
+        if (rageClickPattern) reason = `${rageClickPattern.description} → Breaking tasks into steps`;
+      }
+      reasons.push(reason);
+      logChange("STEP_BY_STEP", "enabled", "Forms & actions simplified");
+    }
+
+    // ===== TIME CONTROL =====
+    if (recs.time_control) {
+      HTML.classList.add("assist-time-control");
+      appliedChanges.push("Time Control");
+      reasons.push("Time management preference → Session timer displayed");
+      logChange("TIME_CONTROL", "enabled", "Progress & time tracking shown");
+    }
+
+    // ===== ERROR SUPPORT =====
+    if (recs.error_support) {
+      HTML.classList.add("assist-error-support");
+      appliedChanges.push("Error Support");
+      
+      let reason = "Error handling preference → Errors highlighted clearly";
+      if (recs.detectedPatterns) {
+        const correctionPattern = recs.detectedPatterns.find(p => p.pattern === 'Many Corrections');
+        if (correctionPattern) reason = `${correctionPattern.description} → Making errors more visible`;
+      }
+      reasons.push(reason);
+      logChange("ERROR_SUPPORT", "enabled", "Errors emphasized");
+    }
+
+    // Show comprehensive summary with pattern details
+    showDetailedChanges(appliedChanges, reasons, source, primaryReason, recs.detectedPatterns);
+
+    // Log for debugging
+    const sourceLabel = source === "ai" ? "🤖 AI Model" : "📋 Smart Defaults";
+    console.log(
+      `%c[${sourceLabel}] Applied ${appliedChanges.length} adaptation(s)`,
+      'color: #2563eb; font-weight: bold; background: #dbeafe; padding: 4px 8px; border-radius: 4px;'
+    );
+    for (const reason of reasons) {
+      console.log(`  → ${reason}`);
+    }
+  }
+
+  function logChange(adaptationName, value, explanation) {
+    const emoji = {
+      'FOCUS_MODE': '📌',
+      'READING_EASE': '📖',
+      'REDUCE_DISTRACTIONS': '🎯',
+      'STEP_BY_STEP': '📋',
+      'TIME_CONTROL': '⏱️',
+    }[adaptationName] || '✨';
+
+    console.log(
+      `%c${emoji} ${adaptationName}%c = ${value}\n    ${explanation}`,
+      'color: #047857; font-weight: 600;',
+      'color: #666; font-weight: normal;'
+    );
+  }
+
+  function showDetailedChanges(changes, reasons, source, primaryReason, patterns) {
+    if (changes.length === 0) return;
+
+    // Create detailed notification
+    const notification = document.createElement('div');
+    notification.id = 'cogni-detailed-changes';
+    notification.style.cssText = `
+      position: fixed;
+      left: 16px;
+      bottom: 16px;
+      z-index: 999998;
+      background: linear-gradient(135deg, #dbeafe 0%, #e0e7ff 100%);
+      border: 1px solid #3b82f6;
+      border-radius: 12px;
+      padding: 12px 14px;
+      max-width: 360px;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+      animation: slideUpNotif 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    `;
+
+    const sourceEmoji = source === "ai" ? "🤖" : "📋";
+    const sourceText = source === "ai" ? "AI adapted" : "Smart defaults applied";
+
+    let html = `
+      <div style="color: #1e40af; font-weight: 600; margin-bottom: 4px; font-size: 13px;">
+        ${sourceEmoji} ${sourceText}
+      </div>
+    `;
+
+    // Add primary reason
+    if (primaryReason) {
+      html += `
+        <div style="
+          color: #1f2937;
+          font-size: 11px;
+          margin-bottom: 8px;
+          padding: 0 4px;
+          font-style: italic;
+        ">
+          <strong>Why:</strong> ${primaryReason}
+        </div>
+      `;
+    }
+
+    // Add changes with reasons
+    changes.forEach((change, idx) => {
+      const reason = reasons[idx] || "";
+      html += `
+        <div style="
+          margin: 6px 0;
+          padding: 6px 8px;
+          background: rgba(255,255,255,0.6);
+          border-radius: 6px;
+          font-size: 12px;
+          color: #1f2937;
+          border-left: 3px solid #3b82f6;
+        ">
+          <div style="font-weight: 500;">${change}</div>
+          <div style="color: #666; font-size: 11px; margin-top: 2px;">${reason}</div>
+        </div>
+      `;
+    });
+
+    // Add collapsible pattern details
+    if (patterns && patterns.length > 0) {
+      html += `
+        <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(59, 130, 246, 0.2);">
+          <details style="cursor: pointer; outline: none;">
+            <summary style="
+              font-size: 10px;
+              color: #3b82f6;
+              font-weight: 600;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+              user-select: none;
+            ">
+              📊 Detection Details (${patterns.length})
+            </summary>
+            <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(59, 130, 246, 0.1);">
+      `;
+
+      patterns.forEach(p => {
+        let severityColor = '#6b7280'; // gray for info
+        if (p.severity === 'high') severityColor = '#dc2626'; // red
+        else if (p.severity === 'medium') severityColor = '#f59e0b'; // amber
+
+        html += `
+          <div style="
+            margin: 4px 0;
+            padding: 4px 6px;
+            background: rgba(255,255,255,0.4);
+            border-left: 2px solid ${severityColor};
+            border-radius: 3px;
+            font-size: 10px;
+            color: #1f2937;
+          ">
+            <span style="font-weight: 600; color: ${severityColor};">${p.icon} ${p.pattern}</span>
+            <div style="color: #666; margin-top: 1px;">${p.description}</div>
+          </div>
+        `;
+      });
+
+      html += `
+            </div>
+          </details>
+        </div>
+      `;
+    }
+
+    html += `
+      <div style="
+        margin-top: 8px;
+        font-size: 10px;
+        color: #3b82f6;
+        text-align: center;
+        cursor: pointer;
+        text-decoration: underline;
+      " onclick="document.getElementById('cogni-detailed-changes').remove();">
+        Dismiss
+      </div>
+    `;
+
+    notification.innerHTML = html;
+    document.documentElement.appendChild(notification);
+
+    // Add animation styles if not present
+    if (!document.getElementById('cogni-change-animations')) {
+      const style = document.createElement('style');
+      style.id = 'cogni-change-animations';
+      style.textContent = `
+        @keyframes slideUpNotif {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    // Auto-dismiss after 6 seconds
+    setTimeout(() => {
+      const elem = document.getElementById('cogni-detailed-changes');
+      if (elem) {
+        elem.style.animation = 'slideUpNotif 0.3s ease-out reverse';
+        setTimeout(() => elem.remove(), 300);
+      }
+    }, 6000);
   }
 
   function recordAction() {
@@ -301,7 +565,8 @@
 
   async function maybeRefreshAIRecommendations() {
     const now = performance.now();
-    if (!monitorState.aiClient || now - monitorState.lastAIAdjustT < 8000) return;
+    // Only run if extension is enabled
+    if (!monitorState.extensionEnabled || !monitorState.aiClient || now - monitorState.lastAIAdjustT < 8000) return;
 
     try {
       const res = await chrome.storage.sync.get(["onboardingResponses"]);
@@ -331,13 +596,19 @@
         zoomLevel: monitorState.zoomLevel
       };
 
-      console.log("[Content] Analyzing interactions:", {
-        overload: interactions.overloadScore,
-        rageClicks: interactions.rageClickTimes.length,
-        jitter: interactions.scrollJitterEvents.length,
-        keyboardOnly: interactions.usesKeyboardOnly,
-        screenReader: interactions.usesScreenReader
-      });
+      // Analyze patterns for transparency
+      const patterns = analyzePatterns(interactions);
+
+      console.log(
+        "%c[🔍 Real-time Analysis]",
+        'color: #7c3aed; font-weight: bold; background: #ede9fe; padding: 4px 8px; border-radius: 4px;'
+      );
+      
+      if (patterns.length > 0) {
+        patterns.forEach(p => {
+          console.log(`  → ${p.icon} ${p.pattern}: ${p.description}`);
+        });
+      }
 
       const recommendations = await monitorState.aiClient.getAIRecommendations(
         res.onboardingResponses,
@@ -345,12 +616,110 @@
       );
 
       if (recommendations) {
+        // Pass pattern info for more detailed explanations
+        recommendations.detectedPatterns = patterns;
         applyAIRecommendations(recommendations);
         monitorState.lastAIAdjustT = now;
       }
     } catch (e) {
       console.warn("[Content] Failed to refresh recommendations:", e.message);
     }
+  }
+
+  function analyzePatterns(interactions) {
+    const patterns = [];
+
+    // Scroll thrashing
+    if (interactions.scrollReversals >= 3) {
+      patterns.push({
+        icon: '🔄',
+        pattern: 'Scroll Thrashing',
+        description: `${interactions.scrollReversals} rapid direction changes detected — you're searching for content`,
+        severity: 'high'
+      });
+    }
+
+    // Idle/stuck
+    if (interactions.idlePeriods >= 2) {
+      patterns.push({
+        icon: '⏸️',
+        pattern: 'Paused/Stuck',
+        description: `${interactions.idlePeriods} pause periods detected — you may be overwhelmed`,
+        severity: 'high'
+      });
+    }
+
+    // Overload score high
+    if (interactions.overloadScore >= 30) {
+      patterns.push({
+        icon: '⚠️',
+        pattern: 'Cognitive Overload',
+        description: `Score: ${interactions.overloadScore}/100 — interface complexity detected`,
+        severity: 'high'
+      });
+    }
+
+    // Rage clicking
+    if (interactions.rageClickTimes.length >= 3) {
+      patterns.push({
+        icon: '🖱️',
+        pattern: 'Rapid Clicking',
+        description: `${interactions.rageClickTimes.length} rapid clicks — possible frustration`,
+        severity: 'medium'
+      });
+    }
+
+    // Scroll jitter
+    if (interactions.scrollJitterEvents.length >= 5) {
+      patterns.push({
+        icon: '📊',
+        pattern: 'Scroll Jitter',
+        description: `${interactions.scrollJitterEvents.length} erratic scroll events — motor coordination issues?`,
+        severity: 'medium'
+      });
+    }
+
+    // Keyboard-only
+    if (interactions.usesKeyboardOnly) {
+      patterns.push({
+        icon: '⌨️',
+        pattern: 'Keyboard Navigation',
+        description: 'No mouse detected — keyboard-only user detected',
+        severity: 'info'
+      });
+    }
+
+    // Screen reader
+    if (interactions.usesScreenReader) {
+      patterns.push({
+        icon: '🔊',
+        pattern: 'Screen Reader',
+        description: 'Screen reader activity detected',
+        severity: 'info'
+      });
+    }
+
+    // Reduced motion preference
+    if (interactions.prefersReducedMotion) {
+      patterns.push({
+        icon: '🎬',
+        pattern: 'Reduced Motion',
+        description: 'System prefers reduced motion — animations disabled',
+        severity: 'info'
+      });
+    }
+
+    // Backspace/corrections
+    if (interactions.backspaceCount >= 5) {
+      patterns.push({
+        icon: '⌫',
+        pattern: 'Many Corrections',
+        description: `${interactions.backspaceCount} backspaces — frequent typos or input errors`,
+        severity: 'medium'
+      });
+    }
+
+    return patterns;
   }
 
   function startInteractionMonitoring() {
@@ -439,6 +808,10 @@
     if (msg.type === "TOGGLE_FOCUS") {
       const enabled = !!msg.enabled;
       const currentLevel = normalizeLevel(HTML.dataset.cogLevel);
+
+      // Update extension state and persist to storage
+      monitorState.extensionEnabled = enabled;
+      chrome.storage.sync.set({ focusEnabled: enabled });
 
       apply(enabled, currentLevel, true);
 
