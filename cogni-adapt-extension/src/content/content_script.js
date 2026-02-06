@@ -258,16 +258,18 @@
     const sizes = { 'enhanced': 48, 'large': 72 };
     const pixelSize = sizes[size] || 48;
     const arrowColour = CONFIG.CURSOR_COLOURS[colour] || '#2563eb';
-    const strokeWidth = (2 * pixelSize) / 48;
+    const strokeWidth = Math.max(1.5, (3 * pixelSize) / 48);
 
+    // Symmetric teardrop cursor: tip at -12px, width 20px, height 28px
     const teardropSVG = `
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 32" width="${pixelSize}" height="${pixelSize}" preserveAspectRatio="xMinYMin meet">
-        <path d="M 12 2 C 16 6 20 12 20 17 C 20 23 16.4 28 12 28 C 7.6 28 4 23 4 17 C 4 12 8 6 12 2 Z" 
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 28" width="${pixelSize}" height="${Math.round(pixelSize * 1.167)}" preserveAspectRatio="xMidYMid meet" style="position:absolute; left:0; top:0;">
+        <path d="M 10 0 C 14.4 4.8 18 10.5 18 15.5 C 18 21 14.9 25.5 10 25.5 C 5.1 25.5 2 21 2 15.5 C 2 10.5 5.6 4.8 10 0 Z" 
               fill="${arrowColour}" 
               stroke="#111111" 
               stroke-width="${strokeWidth}"
               stroke-linejoin="round"
-              stroke-linecap="round"/>
+              stroke-linecap="round"
+              opacity="0.95"/>
       </svg>
     `;
 
@@ -276,8 +278,9 @@
     if (!rafId) {
       function updateCursorPosition() {
         if (cursorOverlay && cursorOverlay.style.display === 'block') {
-          cursorOverlay.style.left = lastMousePos.x + 'px';
-          cursorOverlay.style.top = lastMousePos.y + 'px';
+          // Offset so tip of teardrop (top point) aligns with actual cursor
+          cursorOverlay.style.left = (lastMousePos.x - pixelSize * 0.5) + 'px';
+          cursorOverlay.style.top = (lastMousePos.y - pixelSize * 0.1) + 'px';
         }
         rafId = requestAnimationFrame(updateCursorPosition);
       }
@@ -322,10 +325,11 @@
 
         <div class="${CONFIG.PREFIX}-section">
           <div class="${CONFIG.PREFIX}-label">Colour</div>
-          <div class="${CONFIG.PREFIX}-select">
+          <div class="${CONFIG.PREFIX}-select" style="grid-template-columns: 1fr 1fr;">
             <button class="${CONFIG.PREFIX}-select-btn ${state.cursorColour === 'blue' ? 'active' : ''}" data-cursor-colour="blue">Blue</button>
             <button class="${CONFIG.PREFIX}-select-btn ${state.cursorColour === 'teal' ? 'active' : ''}" data-cursor-colour="teal">Teal</button>
             <button class="${CONFIG.PREFIX}-select-btn ${state.cursorColour === 'purple' ? 'active' : ''}" data-cursor-colour="purple">Purple</button>
+            <button class="${CONFIG.PREFIX}-select-btn ${state.cursorColour === 'coral' ? 'active' : ''}" data-cursor-colour="coral">Coral</button>
           </div>
         </div>
       </div>
@@ -346,70 +350,6 @@
       btn.addEventListener('click', () => setCursorColour(btn.dataset.cursorColour));
     });
   }
-  
-  function detectDeviceHints() {
-    // Detect keyboard-only usage (no mouse/touch events for X seconds)
-    if (monitorState.mouseEvents === 0 && monitorState.keyboardEvents > 5) {
-      monitorState.usesKeyboardOnly = true;
-    }
-    
-    // Detect screen reader via common ARIA attributes
-    const hasAriaLive = document.querySelector('[aria-live]');
-    const hasAriaLabel = document.querySelectorAll('[aria-label]').length > 5;
-    if (hasAriaLive || hasAriaLabel) {
-      monitorState.usesScreenReader = true;
-    }
-    
-    // Detect reduced motion preference
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      monitorState.prefersReducedMotion = true;
-    }
-    
-    // Detect system font scaling
-    const htmlFontSize = parseInt(window.getComputedStyle(document.documentElement).fontSize);
-    monitorState.systemFontScale = htmlFontSize / 16; // 16px is default
-    
-    // Detect zoom level (device pixel ratio may indicate user zoom)
-    monitorState.zoomLevel = window.devicePixelRatio || 1;
-  }
-  
-  function analyzeClickPatterns(deltaTime) {
-    // Detect rage clicks: 3+ clicks in quick succession (< 500ms apart)
-    const recentRageClicks = monitorState.rageClickTimes.filter(
-      t => deltaTime - t < 2000
-    );
-    if (recentRageClicks.length > 0) {
-      monitorState.score += Math.min(5, recentRageClicks.length);
-    }
-    monitorState.rageClickTimes = recentRageClicks;
-  }
-  
-  function analyzeScrollJitter() {
-    // Filter scroll jitter events from last 2 seconds
-    const now = performance.now();
-    monitorState.scrollJitterEvents = monitorState.scrollJitterEvents.filter(
-      t => now - t < 2000
-    );
-    
-    // If many small scroll events, it's jittery (sign of lack of control)
-    if (monitorState.scrollJitterEvents.length > 4) {
-      monitorState.score += 3;
-    }
-  }
-  
-  function analyzeMistypingPattern() {
-    // Keep last 20 backspace events
-    if (monitorState.mistypingPattern.length > 20) {
-      monitorState.mistypingPattern.shift();
-    }
-    
-    // High backspace rate = typing errors/uncertainty
-    const backspaceRatio = monitorState.backspaceCount / (monitorState.keyboardEvents || 1);
-    if (backspaceRatio > 0.15) { // > 15% backspaces = high error rate
-      monitorState.score += 8;
-    }
-  }
-
   function updatePanelUI() {
     const panel = document.getElementById(`${CONFIG.PREFIX}-panel`);
     if (!panel) return;
@@ -443,16 +383,21 @@
 
   function getOrbSVG() {
     const dots = [];
+    const radius = 8;
+    const dotRadius = 1.4;
+    
+    // 8 evenly spaced dots in a perfect circle
     for (let i = 0; i < 8; i++) {
-      const angle = (i * Math.PI * 2) / 8;
-      const x = 12 + 7 * Math.cos(angle);
-      const y = 12 + 7 * Math.sin(angle);
-      dots.push(`<circle cx="${x}" cy="${y}" r="1.2" fill="white"/>`);
+      const angle = (i * Math.PI * 2) / 8 - Math.PI / 2; // Start from top
+      const x = 12 + radius * Math.cos(angle);
+      const y = 12 + radius * Math.sin(angle);
+      dots.push(`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${dotRadius}" fill="white"/>`);
     }
+    
     return `
       <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
         ${dots.join('')}
-        <circle cx="12" cy="12" r="2.5" fill="white"/>
+        <circle cx="12" cy="12" r="2.8" fill="white"/>
       </svg>
     `;
   }
@@ -469,54 +414,65 @@
       orb.style.left = state.orbX + 'px';
       orb.style.top = state.orbY + 'px';
     } else {
-      orb.style.right = '32px';
+      orb.style.right = '24px';
       orb.style.top = '50%';
       orb.style.transform = 'translateY(-50%)';
     }
 
-    let isClickDrag = false;
-    let clickTimeout;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let hasMovedEnough = false;
 
-    orb.addEventListener('mousedown', (e) => {
+    orb.addEventListener('pointerdown', (e) => {
       state.isDraggingOrb = true;
-      isClickDrag = false;
-      clickTimeout = setTimeout(() => {
-        isClickDrag = true;
-      }, 100);
+      hasMovedEnough = false;
+      dragStartX = e.clientX;
+      dragStartY = e.clientY;
 
       const rect = orb.getBoundingClientRect();
       state.dragOffsetX = e.clientX - rect.left;
       state.dragOffsetY = e.clientY - rect.top;
       orb.style.transition = 'none';
+      orb.setPointerCapture(e.pointerId);
     });
 
-    document.addEventListener('mousemove', (e) => {
+    document.addEventListener('pointermove', (e) => {
       if (!state.isDraggingOrb) return;
 
-      const newX = e.clientX - state.dragOffsetX;
-      const newY = e.clientY - state.dragOffsetY;
+      const dx = Math.abs(e.clientX - dragStartX);
+      const dy = Math.abs(e.clientY - dragStartY);
 
-      orb.style.left = newX + 'px';
-      orb.style.top = newY + 'px';
-      orb.style.right = 'auto';
-      orb.style.transform = 'none';
+      if (!hasMovedEnough && (dx > 6 || dy > 6)) {
+        hasMovedEnough = true;
+        orb.style.cursor = 'grabbing';
+      }
+
+      if (hasMovedEnough) {
+        const newX = e.clientX - state.dragOffsetX;
+        const newY = e.clientY - state.dragOffsetY;
+
+        orb.style.left = newX + 'px';
+        orb.style.top = newY + 'px';
+        orb.style.right = 'auto';
+        orb.style.transform = 'none';
+      }
     });
 
-    document.addEventListener('mouseup', () => {
+    document.addEventListener('pointerup', (e) => {
       if (state.isDraggingOrb) {
-        clearTimeout(clickTimeout);
         state.isDraggingOrb = false;
+        orb.style.cursor = 'grab';
 
-        const rect = orb.getBoundingClientRect();
-        state.orbX = rect.left;
-        state.orbY = rect.top;
-        saveSettings();
-
-        orb.style.transition = 'box-shadow 0.2s ease';
-
-        if (!isClickDrag) {
+        if (hasMovedEnough) {
+          const rect = orb.getBoundingClientRect();
+          state.orbX = rect.left;
+          state.orbY = rect.top;
+          saveSettings();
+        } else {
           togglePanel();
         }
+
+        orb.style.transition = 'box-shadow 0.2s ease';
       }
     });
 
