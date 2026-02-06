@@ -14,16 +14,39 @@
 
   const DEFAULT_LEVEL = "med";
 
-  // Interaction tracking for AI context
+  // Detailed interaction tracking for real-time AI recommendations
   const monitorState = {
+    // Basic cognitive load metrics
     score: 0,
     scrollReversals: 0,
     idlePeriods: 0,
+    
+    // Timing & scroll tracking
     lastActionT: performance.now(),
     lastScrollY: window.scrollY,
     lastDir: 0,
     reversalTimes: [],
     lastAIAdjustT: 0,
+    
+    // Detailed interaction patterns
+    clickCount: 0,
+    backspaceCount: 0,
+    mistypingPattern: [],
+    zoomLevel: window.devicePixelRatio || 1,
+    scrollJitterEvents: [],
+    rageClickTimes: [],
+    keyboardEvents: 0,
+    mouseEvents: 0,
+    timeToClick: [],
+    focusShifts: 0,
+    
+    // Device hints detection
+    usesKeyboardOnly: false,
+    usesScreenReader: false,
+    prefersReducedMotion: false,
+    systemFontScale: 1.0,
+    windowWidth: window.innerWidth,
+    
     aiClient: window.__aiClient
   };
 
@@ -123,11 +146,30 @@
 
       // If questionnaire completed, get AI recommendations
       if (res.onboardingResponses && monitorState.aiClient) {
+        // Prepare comprehensive interaction data
         const interactions = {
+          // Basic metrics
           scrollReversals: monitorState.scrollReversals,
           idlePeriods: monitorState.idlePeriods,
-          overloadScore: monitorState.score
+          overloadScore: monitorState.score,
+          
+          // Detailed patterns
+          clickCount: monitorState.clickCount,
+          backspaceCount: monitorState.backspaceCount,
+          keyboardEvents: monitorState.keyboardEvents,
+          mouseEvents: monitorState.mouseEvents,
+          rageClickTimes: monitorState.rageClickTimes,
+          scrollJitterEvents: monitorState.scrollJitterEvents,
+          focusShifts: monitorState.focusShifts,
+          
+          // Device hints
+          usesKeyboardOnly: monitorState.usesKeyboardOnly,
+          usesScreenReader: monitorState.usesScreenReader,
+          prefersReducedMotion: monitorState.prefersReducedMotion,
+          systemFontScale: monitorState.systemFontScale,
+          zoomLevel: monitorState.zoomLevel
         };
+        
         const recommendations = await monitorState.aiClient.getAIRecommendations(
           res.onboardingResponses,
           interactions
@@ -173,6 +215,69 @@
   function recordAction() {
     monitorState.lastActionT = performance.now();
   }
+  
+  function detectDeviceHints() {
+    // Detect keyboard-only usage (no mouse/touch events for X seconds)
+    if (monitorState.mouseEvents === 0 && monitorState.keyboardEvents > 5) {
+      monitorState.usesKeyboardOnly = true;
+    }
+    
+    // Detect screen reader via common ARIA attributes
+    const hasAriaLive = document.querySelector('[aria-live]');
+    const hasAriaLabel = document.querySelectorAll('[aria-label]').length > 5;
+    if (hasAriaLive || hasAriaLabel) {
+      monitorState.usesScreenReader = true;
+    }
+    
+    // Detect reduced motion preference
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      monitorState.prefersReducedMotion = true;
+    }
+    
+    // Detect system font scaling
+    const htmlFontSize = parseInt(window.getComputedStyle(document.documentElement).fontSize);
+    monitorState.systemFontScale = htmlFontSize / 16; // 16px is default
+    
+    // Detect zoom level (device pixel ratio may indicate user zoom)
+    monitorState.zoomLevel = window.devicePixelRatio || 1;
+  }
+  
+  function analyzeClickPatterns(deltaTime) {
+    // Detect rage clicks: 3+ clicks in quick succession (< 500ms apart)
+    const recentRageClicks = monitorState.rageClickTimes.filter(
+      t => deltaTime - t < 2000
+    );
+    if (recentRageClicks.length > 0) {
+      monitorState.score += Math.min(5, recentRageClicks.length);
+    }
+    monitorState.rageClickTimes = recentRageClicks;
+  }
+  
+  function analyzeScrollJitter() {
+    // Filter scroll jitter events from last 2 seconds
+    const now = performance.now();
+    monitorState.scrollJitterEvents = monitorState.scrollJitterEvents.filter(
+      t => now - t < 2000
+    );
+    
+    // If many small scroll events, it's jittery (sign of lack of control)
+    if (monitorState.scrollJitterEvents.length > 4) {
+      monitorState.score += 3;
+    }
+  }
+  
+  function analyzeMistypingPattern() {
+    // Keep last 20 backspace events
+    if (monitorState.mistypingPattern.length > 20) {
+      monitorState.mistypingPattern.shift();
+    }
+    
+    // High backspace rate = typing errors/uncertainty
+    const backspaceRatio = monitorState.backspaceCount / (monitorState.keyboardEvents || 1);
+    if (backspaceRatio > 0.15) { // > 15% backspaces = high error rate
+      monitorState.score += 8;
+    }
+  }
 
   function onScroll() {
     const y = window.scrollY;
@@ -182,6 +287,11 @@
     if (dir !== 0 && monitorState.lastDir !== 0 && dir !== monitorState.lastDir) {
       monitorState.reversalTimes.push(performance.now());
       monitorState.scrollReversals++;
+    }
+    
+    // Track scroll jitter (small scroll movements)
+    if (Math.abs(dy) < 50 && dy !== 0) {
+      monitorState.scrollJitterEvents.push(performance.now());
     }
 
     monitorState.lastDir = dir;
@@ -197,11 +307,37 @@
       const res = await chrome.storage.sync.get(["onboardingResponses"]);
       if (!res.onboardingResponses) return;
 
+      // Prepare comprehensive interaction data
       const interactions = {
+        // Basic metrics
         scrollReversals: monitorState.scrollReversals,
         idlePeriods: monitorState.idlePeriods,
-        overloadScore: monitorState.score
+        overloadScore: monitorState.score,
+        
+        // Detailed patterns
+        clickCount: monitorState.clickCount,
+        backspaceCount: monitorState.backspaceCount,
+        keyboardEvents: monitorState.keyboardEvents,
+        mouseEvents: monitorState.mouseEvents,
+        rageClickTimes: monitorState.rageClickTimes,
+        scrollJitterEvents: monitorState.scrollJitterEvents,
+        focusShifts: monitorState.focusShifts,
+        
+        // Device hints
+        usesKeyboardOnly: monitorState.usesKeyboardOnly,
+        usesScreenReader: monitorState.usesScreenReader,
+        prefersReducedMotion: monitorState.prefersReducedMotion,
+        systemFontScale: monitorState.systemFontScale,
+        zoomLevel: monitorState.zoomLevel
       };
+
+      console.log("[Content] Analyzing interactions:", {
+        overload: interactions.overloadScore,
+        rageClicks: interactions.rageClickTimes.length,
+        jitter: interactions.scrollJitterEvents.length,
+        keyboardOnly: interactions.usesKeyboardOnly,
+        screenReader: interactions.usesScreenReader
+      });
 
       const recommendations = await monitorState.aiClient.getAIRecommendations(
         res.onboardingResponses,
@@ -227,9 +363,35 @@
     const TICK_MS = 800;
 
     window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("click", recordAction, true);
-    window.addEventListener("keydown", recordAction, true);
+    
+    // Enhanced click tracking
+    window.addEventListener("click", (e) => {
+      monitorState.clickCount++;
+      monitorState.mouseEvents++;
+      monitorState.rageClickTimes.push(performance.now());
+      recordAction();
+    }, true);
+    
+    // Enhanced keyboard tracking
+    window.addEventListener("keydown", (e) => {
+      monitorState.keyboardEvents++;
+      if (e.key === "Backspace") {
+        monitorState.backspaceCount++;
+        monitorState.mistypingPattern.push(performance.now());
+      }
+      recordAction();
+    }, true);
+    
     window.addEventListener("input", recordAction, true);
+    
+    // Track focus shifts (tab navigation)
+    document.addEventListener("focusin", () => {
+      monitorState.focusShifts++;
+      recordAction();
+    }, true);
+    
+    // Detect device hints on page load
+    detectDeviceHints();
 
     setInterval(async () => {
       const t = performance.now();
@@ -247,6 +409,12 @@
         monitorState.idlePeriods++;
         monitorState.lastActionT = t - 2500;
       }
+
+      // Analyze detailed interaction patterns
+      analyzeClickPatterns(t);
+      analyzeScrollJitter();
+      analyzeMistypingPattern();
+      detectDeviceHints(); // Re-check every tick
 
       monitorState.score = Math.max(0, monitorState.score - DECAY);
 
