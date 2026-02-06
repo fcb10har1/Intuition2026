@@ -3,78 +3,52 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Adaptive A11y</title>
     <link rel="stylesheet" href="popup.css" />
-    <style>
-      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; }
-      .wrap { width: 320px; padding: 14px; }
-      h1 { font-size: 16px; margin: 0 0 8px; }
-      .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-      .label { font-size: 12px; color: #444; }
-      .sub { font-size: 12px; color: #666; margin-top: 2px; }
-      .section { margin-top: 12px; }
-      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
-      button.assist {
-        width: 100%;
-        padding: 8px 10px;
-        border: 1px solid #ddd;
-        border-radius: 10px;
-        background: #fff;
-        cursor: pointer;
-        font-size: 12px;
-      }
-      button.assist[data-active="1"] { border-color: #111; }
-      .danger { color: #c00; font-size: 12px; margin-top: 8px; }
-      .ok { color: #0a7; font-size: 12px; margin-top: 8px; }
-      .btnRow { display:flex; justify-content:flex-end; gap: 8px; margin-top: 10px; }
-      button.primary { padding: 8px 10px; border-radius: 10px; border: 1px solid #111; background: #111; color:#fff; cursor:pointer; font-size:12px; }
-      button.secondary { padding: 8px 10px; border-radius: 10px; border: 1px solid #ddd; background: #fff; cursor:pointer; font-size:12px; }
-      input[type="range"] { width: 180px; }
-    </style>
+    <title>Adaptive A11y</title>
   </head>
-
   <body>
     <div class="wrap">
       <h1>Adaptive A11y</h1>
 
       <div class="row">
         <div>
-          <div style="font-weight:600; font-size: 13px;">Enabled</div>
-          <div class="sub">Apply assists on this page</div>
+          <div class="label">Enabled</div>
+          <div class="hint">Apply assists on this page</div>
         </div>
-        <input id="enabled" type="checkbox" />
+        <label class="switch">
+          <input id="enabledToggle" type="checkbox" />
+          <span class="slider"></span>
+        </label>
       </div>
 
       <div class="section">
-        <div style="font-weight:600; font-size: 13px;">Intensity</div>
-        <div class="row" style="margin-top:6px;">
-          <div class="label">How strong the changes feel</div>
-          <input id="intensity" type="range" min="0" max="100" step="1" />
-        </div>
+        <div class="label">Intensity</div>
+        <div class="hint">How strong the changes feel</div>
+        <input id="intensitySlider" type="range" min="0" max="1" step="0.05" />
       </div>
 
       <div class="section">
-        <div style="font-weight:600; font-size: 13px;">Assists</div>
+        <div class="label">Assists</div>
         <div class="grid">
-          <button class="assist" data-key="focus_mode">Focus mode</button>
-          <button class="assist" data-key="reduce_distractions">Reduce distractions</button>
-          <button class="assist" data-key="reading_ease">Reading ease</button>
-          <button class="assist" data-key="step_by_step">Step-by-step</button>
-          <button class="assist" data-key="time_control">Time control</button>
-          <button class="assist" data-key="focus_guide">Focus guide</button>
-          <button class="assist" data-key="error_support">Error support</button>
-          <button class="assist" data-key="dark_mode">Dark mode</button>
-        </div>
-
-        <div id="status" class="danger" style="display:none;"></div>
-
-        <div class="btnRow">
-          <button id="refresh" class="secondary" type="button">Refresh</button>
-          <button id="recommend" class="primary" type="button">Recommend</button>
+          <button class="assist" data-assist="focusMode">Focus mode</button>
+          <button class="assist" data-assist="reduceDistractions">Reduce distractions</button>
+          <button class="assist" data-assist="readingEase">Reading ease</button>
+          <button class="assist" data-assist="stepByStep">Step-by-step</button>
+          <button class="assist" data-assist="timeControl">Time control</button>
+          <button class="assist" data-assist="focusGuide">Focus guide</button>
+          <button class="assist" data-assist="errorSupport">Error support</button>
+          <button class="assist" data-assist="darkMode">Dark mode</button>
         </div>
       </div>
-    </div>
 
-    <script src="popup.js"></script>
+      <div id="status" class="status">Connecting…</div>
+
+      <div class="footer">
+        <button id="refreshBtn" class="ghost">Refresh</button>
+        <button id="recommendBtn" class="primary">Recommend</button>
+      </div>
+
+      <script src="popup.js"></script>
+    </div>
   </body>
 </html>

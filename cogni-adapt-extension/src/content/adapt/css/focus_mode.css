@@ -1,31 +1,14 @@
-/* Focus Mode
-   Activated when:
-   html[data-cogEnabled="1"][data-cog_focus_mode="1"]
-*/
+/* src/content/adapt/css/focus_mode.css */
 
-html[data-cogEnabled="1"][data-cog_focus_mode="1"] body {
-  line-height: calc(1.45 + (var(--cog-intensity, 60) / 200));
+html[data-cog-enabled="1"][data-cog-focus-mode="1"] main,
+html[data-cog-enabled="1"][data-cog-focus-mode="1"] article,
+html[data-cog-enabled="1"][data-cog-focus-mode="1"] section {
+  outline: calc(2px * var(--cog-intensity, 0.6)) solid rgba(0, 0, 0, 0.15);
+  outline-offset: 6px;
+  border-radius: 12px;
 }
 
-html[data-cogEnabled="1"][data-cog_focus_mode="1"] body > * {
-  transition: filter 120ms ease, opacity 120ms ease;
-}
-
-/* Try to center main content a bit */
-html[data-cogEnabled="1"][data-cog_focus_mode="1"] body {
-  max-width: 980px;
-  margin-left: auto !important;
-  margin-right: auto !important;
-  padding-left: 16px !important;
-  padding-right: 16px !important;
-}
-
-/* Reduce visual noise from sidebars/ads-ish areas */
-html[data-cogEnabled="1"][data-cog_focus_mode="1"] aside,
-html[data-cogEnabled="1"][data-cog_focus_mode="1"] nav,
-html[data-cogEnabled="1"][data-cog_focus_mode="1"] [role="navigation"],
-html[data-cogEnabled="1"][data-cog_focus_mode="1"] [aria-label*="sidebar" i] {
-  opacity: 0.35;
-  filter: blur(calc(var(--cog-intensity, 60) / 40 * 1px));
-  pointer-events: none;
+html[data-cog-enabled="1"][data-cog-focus-mode="1"] *:focus {
+  outline: calc(3px * var(--cog-intensity, 0.6)) solid rgba(0, 0, 0, 0.6) !important;
+  outline-offset: 3px !important;
 }
