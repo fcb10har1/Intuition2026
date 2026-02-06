@@ -1,194 +1,145 @@
-const ASSIST_KEYS = [
-  "focus_mode",
-  "reduce_distractions",
-  "reading_ease",
-  "step_by_step",
-  "time_control",
-  "focus_guide",
-  "error_support",
-  "dark_mode"
-];
+// src/popup/popup.js
+
+const STORAGE_KEY = "cogState";
 
 function $(id) {
   return document.getElementById(id);
 }
 
-function setStatus(msg, isOk = false) {
-  const el = $("status");
-  if (!msg) {
-    el.style.display = "none";
-    el.textContent = "";
-    el.className = "danger";
-    return;
-  }
-  el.style.display = "block";
-  el.textContent = msg;
-  el.className = isOk ? "ok" : "danger";
-}
-
-async function getActiveTab() {
+async function getActiveTabId() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  return tab;
-}
-
-function sendToTab(tabId, message) {
-  return new Promise((resolve, reject) => {
-    chrome.tabs.sendMessage(tabId, message, (resp) => {
-      const err = chrome.runtime.lastError;
-      if (err) return reject(err);
-      resolve(resp);
-    });
-  });
-}
-
-function sendToBG(message) {
-  return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage(message, (resp) => {
-      const err = chrome.runtime.lastError;
-      if (err) return reject(err);
-      resolve(resp);
-    });
-  });
-}
-
-async function ensureContentScript(tabId) {
-  // Ask service worker to inject content script (useful right after extension reload)
-  try {
-    await sendToBG({ type: "INJECT_CONTENT_SCRIPT", tabId });
-  } catch (_) {
-    // ignore; we’ll still try ping
-  }
+  return tab?.id;
 }
 
 async function ping(tabId) {
   try {
-    const resp = await sendToTab(tabId, { type: "PING" });
-    return resp && resp.ok;
-  } catch (_) {
+    const res = await chrome.tabs.sendMessage(tabId, { type: "PING" });
+    return !!res?.ok;
+  } catch {
     return false;
   }
 }
 
-async function loadStateToUI(tabId) {
-  setStatus("");
+async function getState(tabId) {
+  // Prefer content script state (authoritative for that tab)
+  try {
+    const res = await chrome.tabs.sendMessage(tabId, { type: "GET_STATE" });
+    if (res?.ok && res.state) return res.state;
+  } catch {}
 
-  // 1) Try ping; if missing, inject; ping again
-  let alive = await ping(tabId);
-  if (!alive) {
-    await ensureContentScript(tabId);
-    alive = await ping(tabId);
-  }
+  // fallback: storage
+  const obj = await chrome.storage.sync.get(STORAGE_KEY);
+  return obj[STORAGE_KEY] || null;
+}
 
-  if (!alive) {
-    setStatus("Content script not responding. Refresh the page and reopen popup.");
-    return null;
-  }
+function setStatus(text, ok = true) {
+  const el = $("status");
+  el.textContent = text;
+  el.style.color = ok ? "#118a3c" : "#b00020";
+}
 
-  // 2) Get current state from content script
-  const state = await sendToTab(tabId, { type: "GET_STATE" });
-  $("enabled").checked = !!state.enabled;
-  $("intensity").value = String(state.intensity ?? 60);
+function render(state) {
+  if (!state) return;
 
-  // update buttons
-  document.querySelectorAll("button.assist").forEach((btn) => {
-    const key = btn.getAttribute("data-key");
-    const on = !!(state.assists && state.assists[key]);
-    btn.dataset.active = on ? "1" : "0";
+  $("enabledToggle").checked = !!state.enabled;
+  $("intensitySlider").value = String(state.intensity ?? 0.6);
+
+  const buttons = document.querySelectorAll("button.assist");
+  buttons.forEach((btn) => {
+    const key = btn.dataset.assist;
+    const on = !!state.assists?.[key];
+    btn.classList.toggle("on", on);
   });
+}
+
+async function setEnabled(tabId, enabled) {
+  await chrome.tabs.sendMessage(tabId, { type: "SET_ENABLED", payload: { enabled } });
+}
+
+async function setIntensity(tabId, intensity) {
+  await chrome.tabs.sendMessage(tabId, { type: "SET_INTENSITY", payload: { intensity } });
+}
+
+async function toggleAssist(tabId, assistKey) {
+  await chrome.tabs.sendMessage(tabId, { type: "TOGGLE_ASSIST", payload: { assistKey } });
+}
+
+async function requestRecommendation(currentState) {
+  // Ask background for recommendation
+  const res = await chrome.runtime.sendMessage({
+    type: "REQUEST_RECOMMENDATION",
+    payload: {
+      signals: null, // background can be improved later to store signals
+      currentState
+    }
+  });
+  if (!res?.ok) throw new Error(res?.error || "Failed to get recommendation");
+  return res.recommendation;
+}
+
+async function applyRecommendation(tabId, recommendation) {
+  await chrome.tabs.sendMessage(tabId, { type: "APPLY_RECOMMENDED", payload: recommendation });
+}
+
+(async function init() {
+  const tabId = await getActiveTabId();
+  if (!tabId) {
+    setStatus("No active tab", false);
+    return;
+  }
+
+  const connected = await ping(tabId);
+  if (!connected) {
+    setStatus("Content script not responding. Refresh the page and reopen popup.", false);
+    return;
+  }
 
   setStatus("Connected", true);
-  return state;
-}
 
-async function applyEnabled(tabId, enabled) {
-  await sendToTab(tabId, { type: "SET_ENABLED", enabled: !!enabled });
-}
+  let state = await getState(tabId);
+  render(state);
 
-async function applyIntensity(tabId, intensity) {
-  const v = Math.max(0, Math.min(100, Number(intensity)));
-  await sendToTab(tabId, { type: "SET_INTENSITY", intensity: v });
-}
-
-async function toggleAssist(tabId, key) {
-  await sendToTab(tabId, { type: "TOGGLE_ASSIST", key });
-}
-
-async function recommend(tabId) {
-  // Ask content script to collect signals + ask BG AI client for recommendations
-  const resp = await sendToTab(tabId, { type: "REQUEST_RECOMMENDATIONS" });
-
-  if (!resp || !resp.ok) {
-    setStatus(resp?.error || "Recommendation failed.");
-    return;
-  }
-
-  const recs = resp.recommendations || [];
-  if (recs.length === 0) {
-    setStatus("No recommendations right now.", true);
-    return;
-  }
-
-  // Turn on recommended assists
-  for (const key of recs) {
-    if (ASSIST_KEYS.includes(key)) {
-      await sendToTab(tabId, { type: "SET_ASSIST", key, value: true });
-    }
-  }
-
-  setStatus(`Recommended: ${recs.map((x) => x.replace(/_/g, " ")).join(", ")}`, true);
-  await loadStateToUI(tabId);
-}
-
-async function main() {
-  const tab = await getActiveTab();
-  if (!tab || !tab.id) {
-    setStatus("No active tab.");
-    return;
-  }
-  const tabId = tab.id;
-
-  await loadStateToUI(tabId);
-
-  $("enabled").addEventListener("change", async (e) => {
-    try {
-      await applyEnabled(tabId, e.target.checked);
-      await loadStateToUI(tabId);
-    } catch {
-      setStatus("Content script not responding. Refresh the page and reopen popup.");
-    }
+  $("enabledToggle").addEventListener("change", async (e) => {
+    await setEnabled(tabId, e.target.checked);
+    state = await getState(tabId);
+    render(state);
   });
 
-  $("intensity").addEventListener("input", async (e) => {
-    try {
-      await applyIntensity(tabId, e.target.value);
-    } catch {
-      setStatus("Content script not responding. Refresh the page and reopen popup.");
-    }
+  $("intensitySlider").addEventListener("input", async (e) => {
+    await setIntensity(tabId, Number(e.target.value));
+    state = await getState(tabId);
+    render(state);
   });
 
   document.querySelectorAll("button.assist").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      const key = btn.getAttribute("data-key");
-      try {
-        await toggleAssist(tabId, key);
-        await loadStateToUI(tabId);
-      } catch {
-        setStatus("Content script not responding. Refresh the page and reopen popup.");
-      }
+      await toggleAssist(tabId, btn.dataset.assist);
+      state = await getState(tabId);
+      render(state);
     });
   });
 
-  $("recommend").addEventListener("click", async () => {
+  $("refreshBtn").addEventListener("click", async () => {
     try {
-      await recommend(tabId);
+      await chrome.tabs.sendMessage(tabId, { type: "REFRESH_RECOMMENDATIONS" });
+      state = await getState(tabId);
+      render(state);
+      setStatus("Connected", true);
     } catch {
-      setStatus("Recommendation failed. Try refreshing the page.");
+      setStatus("Refresh failed. Reload the page.", false);
     }
   });
 
-  $("refresh").addEventListener("click", async () => {
-    await loadStateToUI(tabId);
+  $("recommendBtn").addEventListener("click", async () => {
+    try {
+      state = await getState(tabId);
+      const rec = await requestRecommendation(state);
+      await applyRecommendation(tabId, rec);
+      state = await getState(tabId);
+      render(state);
+      setStatus("Recommendation applied", true);
+    } catch (e) {
+      setStatus(String(e?.message || e), false);
+    }
   });
-}
-
-main().catch(() => setStatus("Popup error."));
+})();

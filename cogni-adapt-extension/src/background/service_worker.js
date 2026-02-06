@@ -1,81 +1,37 @@
-// MV3 Service Worker (self-contained)
+// src/background/service_worker.js
+// MV3 service worker (module)
 
-// ===== tiny local "AI client" (rules-based) =====
-function clamp01(x) {
-  const n = Number(x);
-  if (!Number.isFinite(n)) return 0;
-  return Math.max(0, Math.min(1, n));
-}
+import { getRecommendation } from "../shared/ai_client.js";
 
-function recommendAssists(signals) {
-  const density = clamp01(signals?.densityScore);
-  const wordCount = Number(signals?.wordCount || 0);
-  const linkCount = Number(signals?.linkCount || 0);
-  const hasForms = !!signals?.hasForms;
-
-  const recs = [];
-
-  if (density > 0.55 || linkCount > 80) {
-    recs.push("reduce_distractions", "focus_mode");
-  }
-  if (wordCount > 1200) {
-    recs.push("reading_ease");
-  }
-  if (hasForms) {
-    recs.push("error_support");
-  }
-
-  return Array.from(new Set(recs));
-}
-
-// ===== default stored state =====
-const DEFAULT_STATE = {
-  enabled: true,
-  intensity: 60,
-  assists: {
-    focus_mode: false,
-    reduce_distractions: false,
-    reading_ease: false,
-    step_by_step: false,
-    time_control: false,
-    focus_guide: false,
-    error_support: false,
-    dark_mode: false
-  }
-};
-
-chrome.runtime.onInstalled.addListener(async () => {
-  const existing = await chrome.storage.sync.get(["state"]);
-  if (!existing.state) {
-    await chrome.storage.sync.set({ state: DEFAULT_STATE });
-  }
+chrome.runtime.onInstalled.addListener(() => {
+  // optional init
 });
 
-// Best-effort injection (helpful after extension reload without page refresh)
-async function injectContentScript(tabId) {
-  try {
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      files: ["src/content/content_script.js"]
-    });
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: String(e?.message || e) };
-  }
-}
-
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (!msg || !msg.type) return;
+  (async () => {
+    try {
+      if (!msg || !msg.type) return;
 
-  if (msg.type === "INJECT_CONTENT_SCRIPT") {
-    injectContentScript(msg.tabId).then(sendResponse);
-    return true;
-  }
+      // Popup asks background to compute recommendation
+      if (msg.type === "REQUEST_RECOMMENDATION") {
+        const { signals, currentState } = msg.payload || {};
+        const rec = await getRecommendation({ signals, currentState });
 
-  if (msg.type === "AI_RECOMMEND") {
-    const signals = msg.signals || {};
-    const recs = recommendAssists(signals);
-    sendResponse({ ok: true, recommendations: recs });
-    return true;
-  }
+        sendResponse({ ok: true, recommendation: rec });
+        return;
+      }
+
+      // Content script might send signals here (optional)
+      if (msg.type === "SIGNALS_UPDATE") {
+        // You can store / aggregate if you want
+        sendResponse({ ok: true });
+        return;
+      }
+    } catch (e) {
+      sendResponse({ ok: false, error: String(e?.message || e) });
+    }
+  })();
+
+  // IMPORTANT: keep channel open for async
+  return true;
 });

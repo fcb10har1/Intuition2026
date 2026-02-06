@@ -1,47 +1,39 @@
-(function () {
-  function clamp01(x) {
-    const n = Number(x);
-    if (!Number.isFinite(n)) return 0;
-    return Math.max(0, Math.min(1, n));
-  }
+// src/shared/ai_client.js
+// Local, safe "AI" recommendation stub (no external calls)
 
-  /**
-   * signals example:
-   * {
-   *   wordCount: number,
-   *   linkCount: number,
-   *   buttonCount: number,
-   *   headingCount: number,
-   *   hasForms: boolean,
-   *   densityScore: 0..1
-   * }
-   */
-  function recommendAssists(signals) {
-    const density = clamp01(signals.densityScore);
-    const wordCount = Number(signals.wordCount || 0);
-    const linkCount = Number(signals.linkCount || 0);
-    const hasForms = !!signals.hasForms;
+function clamp01(x) {
+  const n = Number(x);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(1, n));
+}
 
-    const recs = [];
+/**
+ * @param {{signals?: any, currentState?: any}} input
+ * @returns {{intensity:number, assists: Record<string, boolean>}}
+ */
+export async function getRecommendation(input = {}) {
+  const current = input.currentState || {};
+  const currIntensity = clamp01(current.intensity ?? 0.6);
 
-    // High density → reduce distractions + focus mode
-    if (density > 0.55 || linkCount > 80) {
-      recs.push("reduce_distractions", "focus_mode");
-    }
+  // Very simple heuristic:
+  // - if page seems "dense", recommend reduceDistractions + readingEase
+  // - keep focusMode on if already on
+  const signals = input.signals || {};
+  const dense = Boolean(signals?.densePage);
+  const manyLinks = Boolean(signals?.manyLinks);
 
-    // Very text heavy → reading ease
-    if (wordCount > 1200) {
-      recs.push("reading_ease");
-    }
+  const assists = {
+    focusMode: Boolean(current?.assists?.focusMode),
+    reduceDistractions: dense || manyLinks || Boolean(current?.assists?.reduceDistractions),
+    readingEase: dense || Boolean(current?.assists?.readingEase),
+    stepByStep: Boolean(current?.assists?.stepByStep),
+    timeControl: Boolean(current?.assists?.timeControl),
+    focusGuide: Boolean(current?.assists?.focusGuide),
+    errorSupport: Boolean(current?.assists?.errorSupport),
+    darkMode: Boolean(current?.assists?.darkMode)
+  };
 
-    // If forms exist → error support (helps cognitive load with errors)
-    if (hasForms) {
-      recs.push("error_support");
-    }
+  const intensity = clamp01(dense ? Math.max(currIntensity, 0.7) : currIntensity);
 
-    // Keep unique, stable order
-    return Array.from(new Set(recs));
-  }
-
-  globalThis.AIClient = { recommendAssists };
-})();
+  return { intensity, assists };
+}
